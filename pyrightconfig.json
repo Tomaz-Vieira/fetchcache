@@ -1,0 +1,16 @@
+{
+  "include": ["dlcache/"],
+  "typeCheckingMode": "strict",
+  "reportMissingSuperCall": "error",
+  "reportUnnecessaryTypeIgnoreComment":"error",
+  "reportUninitializedInstanceVariable": "error",
+  "reportUnknownMemberType": false,
+  "reportIncompatibleMethodOverride": true,
+  "reportMissingTypeArgument": true,
+  "reportMissingTypeStubs": "warning",
+  "useLibraryCodeForTypes": true,
+  "reportUnusedCallResult": "error",
+  "reportUnusedVariable": "warning",
+  "pythonVersion": "3.8",
+  "pythonPlatform": "Linux"
+}
