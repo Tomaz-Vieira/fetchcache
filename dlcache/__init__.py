@@ -11,18 +11,6 @@ import os
 class DownloadCacheException(Exception):
     pass
 
-class CantCreateLock(DownloadCacheException):
-    def __init__(self, *, path: Path) -> None:
-        super().__init__(f"Could not create a lock file at {path}")
-
-class CantCreateTempFile(DownloadCacheException):
-    def __init__(self) -> None:
-        super().__init__("Could not create temporary file")
-
-class CantCreateSentinel(DownloadCacheException):
-    def __init__(self, *, sentinel_path: Path, url: str):
-        super().__init__(f"Can't create sentinel for {url} at {sentinel_path}")
-
 class DownloadInterrupted(DownloadCacheException):
     def __init__(self, *, url: str) -> None:
         super().__init__(f"Downloading of {url} was interrupted")
