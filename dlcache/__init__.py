@@ -7,6 +7,9 @@ import httpx
 from hashlib import sha256
 import tempfile
 import os
+import logging
+
+logger = logging.getLogger()
 
 class DownloadCacheException(Exception):
     pass
@@ -24,29 +27,37 @@ class DlCache:
         self,
         *,
         dir_path: Path,
-        __private_marker: __PrivateMarker, # pyright: ignore []
+        _private_marker: __PrivateMarker, # pyright: ignore []
     ):
         # FileLock is reentrant, so multiple threads would be able to acquire the lock without a threading Lock
         self._ongoing_downloads_lock: Final[threading.Lock] = threading.Lock()
         self._ongoing_downloads: Dict[str, threading.Event] = {}
 
+        self._hits = 0
+        self._misses = 0
 
         self.dir_path: Final[Path] = dir_path
         self._client: Final[httpx.Client] = httpx.Client()
         super().__init__()
 
+    def hits(self) -> int:
+        return self._hits
+
+    def misses(self) -> int:
+        return self._misses
+
     @classmethod
     def create(cls, dir_path: Path) -> "DlCache | DownloadCacheException":
         # FIXME: test writable?
-        return DlCache(dir_path=dir_path, __private_marker=cls.__PrivateMarker())
+        return DlCache(dir_path=dir_path, _private_marker=cls.__PrivateMarker())
 
     def _contents_path(self, *, sha: str) -> Path: #FIXME: use HASH type?
         return self.dir_path / sha
 
     def download(self, url: str) -> "Tuple[BinaryIO, str] | DownloadInterrupted": #FIXME: URL class?
-        url_sha = sha256(url.encode("utf8"))
+        url_sha = sha256(url.encode("utf8")).hexdigest()
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_sha}.lock")
-        url_symlink = self.dir_path / f"url_{url_sha.hexdigest()}.contents"
+        url_symlink = self.dir_path / f"url_{url_sha}.contents"
 
         def open_cached_file() -> Tuple[BinaryIO, str]:
             return (open(url_symlink, "rb"), Path(os.readlink(url_symlink)).name)
@@ -57,6 +68,7 @@ class DlCache:
             self._ongoing_downloads_lock.release() # >>>>>>>
             _ = dl_event.wait()
             if url_symlink.exists():
+                self._hits += 1
                 return open_cached_file()
             else:
                 return DownloadInterrupted(url=url)
@@ -65,10 +77,14 @@ class DlCache:
             self._ongoing_downloads_lock.release() # >>>>>>
 
         with interproc_lock:
+            logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} gets the file lock for {interproc_lock.lock_file}")
             try:
                 if url_symlink.exists(): # some other process already downloaded it
+                    logger.debug(f"pid{os.getpid()}:{threading.get_ident()} uses CACHED file {interproc_lock.lock_file}")
+                    self._hits += 1
                     return open_cached_file()
 
+                self._misses += 1
                 resp = httpx.get(url).raise_for_status()
                 temp_file = tempfile.NamedTemporaryFile(delete=False)
                 contents_sha  = sha256()
@@ -77,13 +93,17 @@ class DlCache:
                     _ = temp_file.write(chunk) #FIXME: check num bytes written?
                 temp_file.close()
 
-                _ = shutil.move(src=temp_file.file.name, dst=self._contents_path(sha=contents_sha.hexdigest()))
-                os.symlink(src=self._contents_path(sha=contents_sha.hexdigest()), dst=url_symlink)
+                contents_path = self._contents_path(sha=contents_sha.hexdigest())
+                logger.info(f"Moving temp file to {contents_path}")
+                _ = shutil.move(src=temp_file.file.name, dst=contents_path)
+                logger.info(f"Linking src {contents_path} as {url_symlink}")
+                os.symlink(src=contents_path, dst=url_symlink)
             except Exception:
                 with self._ongoing_downloads_lock:
                     del self._ongoing_downloads[url] # remove the Event so this download can be retried
                 raise
             finally:
                 dl_event.set() # notify threads that download is done. It'll have failed if file is not there
+                logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
             return open_cached_file()
 
