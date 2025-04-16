@@ -25,7 +25,7 @@ PAYLOADS = [secrets.token_bytes(4096 * 5) for _ in range(10)]
 HASHES = [sha256(payload) for payload in PAYLOADS]
 
 CACHE_DIR = tempfile.TemporaryDirectory(suffix="_cache")
-SERVER_PORT=8123
+SERVER_PORT=8123 #FIXME: get a free port
 
 class HttpHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -47,18 +47,20 @@ class HttpHandler(BaseHTTPRequestHandler):
             logger.debug(f"Sent {start}:{end} of {self.path}. Will sleep for {sleep_time:.2f}")
             time.sleep(sleep_time)
 
-def download_stuff(_process_idx: int) -> Tuple[int, int]:
+def download_stuff(process_idx: int) -> Tuple[int, int]:
     cache = DlCache.create(Path(CACHE_DIR.name))
     assert not isinstance(cache, Exception)
 
     def dl_and_check(idx: int):
         res = cache.download(f"http://localhost:{SERVER_PORT}/{idx}")
         assert not isinstance(res, Exception)
-        (reader, hash) = res
-        assert sha256(reader.read()).hexdigest() == hash
+        (reader, digest) = res
+        assert sha256(reader.read()) == digest
 
     tp = ThreadPoolExecutor(max_workers=10)
-    payload_indices = sorted(range(PAYLOADS.__len__()), key=lambda _: random.random())
+    rng = random.Random()
+    rng.seed(process_idx)
+    payload_indices = sorted(range(PAYLOADS.__len__()), key=lambda _: rng.random())
     _ = list(tp.map(dl_and_check, payload_indices))
 
     return (cache.hits(), cache.misses())

@@ -18,6 +18,19 @@ class DownloadInterrupted(DownloadCacheException):
     def __init__(self, *, url: str) -> None:
         super().__init__(f"Downloading of {url} was interrupted")
 
+class Digest:
+    def __init__(self, *, digest: str) -> None:
+        super().__init__()
+        self.digest: Final[str] = digest
+
+    def __eq__(self, value: object, /) -> bool:
+        if isinstance(value, Digest):
+            return self.digest == value.digest
+        if isinstance(value, sha256().__class__):
+            return self.digest == value.hexdigest()
+        return False
+
+
 class DlCache:
     class __PrivateMarker:
         pass
@@ -54,13 +67,16 @@ class DlCache:
     def _contents_path(self, *, sha: str) -> Path: #FIXME: use HASH type?
         return self.dir_path / sha
 
-    def download(self, url: str) -> "Tuple[BinaryIO, str] | DownloadInterrupted": #FIXME: URL class?
+    def download(self, url: str) -> "Tuple[BinaryIO, Digest] | DownloadInterrupted": #FIXME: URL class?
         url_sha = sha256(url.encode("utf8")).hexdigest()
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_sha}.lock")
         url_symlink = self.dir_path / f"url_{url_sha}.contents"
 
-        def open_cached_file() -> Tuple[BinaryIO, str]:
-            return (open(url_symlink, "rb"), Path(os.readlink(url_symlink)).name)
+        def open_cached_file() -> Tuple[BinaryIO, Digest]:
+            return (
+                open(url_symlink, "rb"),
+                Digest(digest=Path(os.readlink(url_symlink)).name)
+            )
 
         _ = self._ongoing_downloads_lock.acquire() # <<<<<<<<<
         dl_event = self._ongoing_downloads.get(url)
