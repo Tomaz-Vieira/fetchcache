@@ -16,7 +16,7 @@ import logging
 
 import httpx
 
-from dlcache import DlCache
+from dlcache import Digest, DlCache
 
 logger = logging.getLogger()
 
@@ -62,6 +62,16 @@ def download_stuff(process_idx: int) -> Tuple[int, int]:
     rng.seed(process_idx)
     payload_indices = sorted(range(PAYLOADS.__len__()), key=lambda _: rng.random())
     _ = list(tp.map(dl_and_check, payload_indices))
+
+    reader_digest = cache.download(f"http://localhost:{SERVER_PORT}/0")
+    assert not isinstance(reader_digest, Exception)
+    (reader, digest) = reader_digest
+
+    computed_digest = Digest(digest=sha256(reader.read()).hexdigest())
+    assert digest == computed_digest
+    cached_reader = cache.get_cached(digest=digest)
+    assert cached_reader is not None
+    assert Digest(digest=sha256(cached_reader.read()).hexdigest()) == computed_digest
 
     return (cache.hits(), cache.misses())
 

@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 import threading
-from typing import BinaryIO, Dict, Final, Tuple
+from typing import BinaryIO, Dict, Final, Optional, Tuple
 from filelock import FileLock
 import httpx
 from hashlib import sha256
@@ -123,3 +123,9 @@ class DlCache:
                 logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
             return open_cached_file()
 
+    def get_cached(self, digest: Digest) -> Optional[BinaryIO]:
+        for entry in self.dir_path.iterdir():
+            if digest.digest == entry.name:
+                return open(entry, "rb")
+        else:
+            return None
