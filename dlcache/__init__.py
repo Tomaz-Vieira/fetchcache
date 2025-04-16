@@ -31,7 +31,7 @@ class Digest:
         return False
 
 
-class DlCache:
+class DiskDownloadCache:
     class __PrivateMarker:
         pass
 
@@ -60,9 +60,9 @@ class DlCache:
         return self._misses
 
     @classmethod
-    def create(cls, dir_path: Path) -> "DlCache | DownloadCacheException":
+    def create(cls, dir_path: Path) -> "DiskDownloadCache | DownloadCacheException":
         # FIXME: test writable?
-        return DlCache(dir_path=dir_path, _private_marker=cls.__PrivateMarker())
+        return DiskDownloadCache(dir_path=dir_path, _private_marker=cls.__PrivateMarker())
 
     def _contents_path(self, *, sha: str) -> Path: #FIXME: use HASH type?
         return self.dir_path / sha

@@ -16,7 +16,7 @@ import logging
 
 import httpx
 
-from dlcache import Digest, DlCache
+from dlcache import Digest, DiskDownloadCache
 
 logger = logging.getLogger()
 
@@ -48,7 +48,7 @@ class HttpHandler(BaseHTTPRequestHandler):
             time.sleep(sleep_time)
 
 def download_stuff(process_idx: int) -> Tuple[int, int]:
-    cache = DlCache.create(Path(CACHE_DIR.name))
+    cache = DiskDownloadCache.create(Path(CACHE_DIR.name))
     assert not isinstance(cache, Exception)
 
     def dl_and_check(idx: int):
