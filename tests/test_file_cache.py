@@ -58,7 +58,7 @@ def download_stuff(process_idx: int) -> Tuple[int, int]:
     assert not isinstance(cache, Exception)
 
     def dl_and_check(idx: int):
-        res = cache.download(f"http://localhost:{SERVER_PORT}/{idx}")
+        res = cache.fetch(f"http://localhost:{SERVER_PORT}/{idx}")
         assert not isinstance(res, Exception)
         (reader, digest) = res
         assert ContentDigest(sha256(reader.read()).digest()) == digest
@@ -69,7 +69,7 @@ def download_stuff(process_idx: int) -> Tuple[int, int]:
     payload_indices = sorted(range(PAYLOADS.__len__()), key=lambda _: rng.random())
     _ = list(tp.map(dl_and_check, payload_indices))
 
-    reader_digest = cache.download(f"http://localhost:{SERVER_PORT}/0")
+    reader_digest = cache.fetch(f"http://localhost:{SERVER_PORT}/0")
     assert not isinstance(reader_digest, Exception)
     (reader, digest) = reader_digest
 

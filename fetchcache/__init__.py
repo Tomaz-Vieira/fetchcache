@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class DownloadCacheException(Exception):
     pass
 
-class DownloadInterrupted(DownloadCacheException):
+class FetchInterrupted(DownloadCacheException):
     def __init__(self, *, url: str) -> None:
         super().__init__(f"Downloading of {url} was interrupted")
 
@@ -168,7 +168,7 @@ class DiskCache:
                 return open(entry_path, "rb")
         return None
 
-    def download(self, url: str) -> "Tuple[BinaryIO, ContentDigest] | DownloadInterrupted": #FIXME: URL class?
+    def fetch(self, url: str) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted": #FIXME: URL class?
         url_digest = UrlDigest.from_url(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
         url_symlink_path = UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
@@ -180,7 +180,7 @@ class DiskCache:
             _ = dl_event.wait()
             out = self.get_by_url(url=url)
             if out is None:
-                return DownloadInterrupted(url=url)
+                return FetchInterrupted(url=url)
             else:
                 self._hits += 1
                 return out
