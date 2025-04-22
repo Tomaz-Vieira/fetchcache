@@ -10,15 +10,14 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http import HTTPStatus
-from typing import Tuple
+from typing import Final, Iterable, Tuple
 from typing_extensions import List
 import logging
 
 import httpx
 
-import dlcache
-from dlcache import DiskDownloadCache
-from dlcache.digest import ContentDigest
+from fetchcache import DiskCache
+from fetchcache.digest import ContentDigest
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ class HttpHandler(BaseHTTPRequestHandler):
             time.sleep(sleep_time)
 
 def download_stuff(process_idx: int) -> Tuple[int, int]:
-    cache = DiskDownloadCache.create(Path(CACHE_DIR.name))
+    cache = DiskCache.create(Path(CACHE_DIR.name), fetcher=HttpxFetcher())
     assert not isinstance(cache, Exception)
 
     def dl_and_check(idx: int):
@@ -101,9 +100,19 @@ def start_dummy_server() -> multiprocessing.Process:
         raise RuntimeError("Dummy server did not become ready")
     return server_proc
 
+class HttpxFetcher:
+    def __init__(self) -> None:
+        super().__init__()
+        self._client: Final[httpx.Client] = httpx.Client()
+
+    def __call__(self, url: str) -> Iterable[bytes]:
+        return self._client.get(url).raise_for_status().iter_bytes(4096)
+
 if __name__ == "__main__":
     logging.basicConfig()
-    # logging.getLogger(dlcache.__name__).setLevel(logging.DEBUG)
+    # import fetchcache
+    # logging.getLogger(fetchcace.__name__).setLevel(logging.DEBUG)
+
     server_proc = start_dummy_server()
     try:
         pp = ProcessPoolExecutor(max_workers=10)

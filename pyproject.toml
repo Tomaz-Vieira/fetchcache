@@ -6,5 +6,9 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "filelock>=3.16.1",
+]
+
+[dependency-groups]
+dev = [
     "httpx>=0.28.1",
 ]

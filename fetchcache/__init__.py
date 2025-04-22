@@ -1,9 +1,9 @@
 import shutil
 from pathlib import Path
 import threading
-from typing import BinaryIO, Dict, Final, Optional, Tuple
+from typing import BinaryIO, Callable, Dict, Final, Iterable, Optional, Tuple
+from typing_extensions import TypeAlias
 from filelock import FileLock
-import httpx
 from hashlib import sha256
 import tempfile
 import os
@@ -96,8 +96,9 @@ class ContentHashSymlinkPath(CacheEntrySymlinkBase):
     def __init__(self, digest: ContentDigest, *, cache_dir: Path) -> None:
         super().__init__(cache_dir / f"content_{digest}")
 
+Fetcher: TypeAlias = Callable[[str], Iterable[bytes]]
 
-class DiskDownloadCache:
+class DiskCache:
     class __PrivateMarker:
         pass
 
@@ -106,6 +107,7 @@ class DiskDownloadCache:
         self,
         *,
         dir_path: Path,
+        fetcher: Fetcher,
         use_symlinks: bool,
         _private_marker: __PrivateMarker, # pyright: ignore []
     ):
@@ -117,8 +119,8 @@ class DiskDownloadCache:
         self._misses = 0
 
         self.dir_path: Final[Path] = dir_path
+        self.fetcher: Final[Fetcher] = fetcher
         self.use_symlinks: Final[bool] = use_symlinks
-        self._client: Final[httpx.Client] = httpx.Client()
         super().__init__()
 
     def hits(self) -> int:
@@ -128,11 +130,13 @@ class DiskDownloadCache:
         return self._misses
 
     @classmethod
-    def create(cls, dir_path: Path, use_symlinks: bool = True) -> "DiskDownloadCache | DownloadCacheException":
+    def create(cls, dir_path: Path, fetcher: Fetcher, use_symlinks: bool = True) -> "DiskCache | DownloadCacheException":
         # FIXME: test writable?
-        return DiskDownloadCache(
-            dir_path=dir_path, _private_marker=cls.__PrivateMarker(),
+        return DiskCache(
+            dir_path=dir_path,
+            fetcher=fetcher,
             use_symlinks=use_symlinks,
+            _private_marker=cls.__PrivateMarker(),
         )
 
     def _contents_path(self, *, sha: str) -> Path: #FIXME: use HASH type?
@@ -194,10 +198,10 @@ class DiskDownloadCache:
                     return out
 
                 self._misses += 1
-                resp = httpx.get(url).raise_for_status()
+                chunks = self.fetcher(url)
                 temp_file = tempfile.NamedTemporaryFile(delete=False)
                 contents_sha  = sha256()
-                for chunk in resp.iter_bytes(chunk_size=4096):
+                for chunk in chunks:
                     contents_sha.update(chunk)
                     _ = temp_file.write(chunk) #FIXME: check num bytes written?
                 temp_file.close()
