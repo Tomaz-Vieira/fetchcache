@@ -5,25 +5,18 @@ A thread-safe, process-safe cache for slow fetching operations, like web request
 ## Usage
 
 ```python
-    import httpx
     from fetchcache import DiskCache
     from pathlib import Path
-    from typing import Final, Iterable
+    from typing import Iterable
+    from hashlib import sha256
 
-    class MyFetcher:
-      def __init__(self) -> None:
-          super().__init__()
-          self._client: Final[httpx.Client] = httpx.Client()
-
-      def __call__(self, url: str) -> Iterable[bytes]:
-          return self._client.get(url).raise_for_status().iter_bytes(4096)
+    def my_fetch(url: str) -> Iterable[bytes]:
+        import httpx
+        return httpx.get(url).raise_for_status().iter_bytes(4096)
 
 
-    cache = DiskCache(cache_dir=Path("/tmp/my_cache"), fetcher=MyFetcher())
+    cache = DiskCache(cache_dir=Path("/tmp/my_cache"), fetcher=my_fetch)
 
-    result = cache.fetch("https://www.ilastik.org/documentation/pixelclassification/snapshots/training2.png")
-    assert not isinstance(result, Exception)
-    reader = result[0]
-    data: bytes = reader.read()
-    print(f"Got {data.__len__()} bytes")
+    reader, contents_digest = cache.fetch("https://www.ilastik.org/documentation/pixelclassification/snapshots/training2.png")
+    assert sha256(reader.read()).digest() == contents_digest.digest
 ```
