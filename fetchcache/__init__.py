@@ -153,7 +153,7 @@ class DiskCache:
                 return open(entry_path, "rb")
         return None
 
-    def fetch(self, url: str) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted": #FIXME: URL class?
+    def try_fetch(self, url: str) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted": #FIXME: URL class?
         url_digest = UrlDigest.from_url(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
         url_symlink_path = UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
@@ -207,3 +207,10 @@ class DiskCache:
                 dl_event.set() # notify threads that download is done. It'll have failed if file is not there
                 logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
             return cache_entry_path.open()
+
+    def fetch(self, url: str, retries: int = 3) -> "Tuple[BinaryIO, ContentDigest]":
+        for _ in range(retries):
+            result = self.try_fetch(url)
+            if not isinstance(result, FetchInterrupted):
+                return result
+        raise RuntimeError("Number of retries exhausted")
