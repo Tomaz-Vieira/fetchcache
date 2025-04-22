@@ -99,17 +99,12 @@ class ContentHashSymlinkPath(CacheEntrySymlinkBase):
 Fetcher: TypeAlias = Callable[[str], Iterable[bytes]]
 
 class DiskCache:
-    class __PrivateMarker:
-        pass
-
-
     def __init__(
         self,
         *,
-        dir_path: Path,
+        cache_dir: Path,
         fetcher: Fetcher,
-        use_symlinks: bool,
-        _private_marker: __PrivateMarker, # pyright: ignore []
+        use_symlinks: bool = True,
     ):
         # FileLock is reentrant, so multiple threads would be able to acquire the lock without a threading Lock
         self._ongoing_downloads_lock: Final[threading.Lock] = threading.Lock()
@@ -118,7 +113,7 @@ class DiskCache:
         self._hits = 0
         self._misses = 0
 
-        self.dir_path: Final[Path] = dir_path
+        self.dir_path: Final[Path] = cache_dir
         self.fetcher: Final[Fetcher] = fetcher
         self.use_symlinks: Final[bool] = use_symlinks
         super().__init__()
@@ -128,16 +123,6 @@ class DiskCache:
 
     def misses(self) -> int:
         return self._misses
-
-    @classmethod
-    def create(cls, dir_path: Path, fetcher: Fetcher, use_symlinks: bool = True) -> "DiskCache | DownloadCacheException":
-        # FIXME: test writable?
-        return DiskCache(
-            dir_path=dir_path,
-            fetcher=fetcher,
-            use_symlinks=use_symlinks,
-            _private_marker=cls.__PrivateMarker(),
-        )
 
     def _contents_path(self, *, sha: str) -> Path: #FIXME: use HASH type?
         return self.dir_path / sha

@@ -6,7 +6,7 @@ import time
 import secrets
 import tempfile
 import random
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, ProcessPoolExecutor
 from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http import HTTPStatus
@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 PAYLOADS = [secrets.token_bytes(4096 * 5) for _ in range(10)]
 HASHES = [sha256(payload) for payload in PAYLOADS]
 
-CACHE_DIR = tempfile.TemporaryDirectory(suffix="_cache")
 SERVER_PORT=8123 #FIXME: get a free port
 
 class HttpHandler(BaseHTTPRequestHandler):
@@ -48,12 +47,11 @@ class HttpHandler(BaseHTTPRequestHandler):
             logger.debug(f"Sent {start}:{end} of {self.path}. Will sleep for {sleep_time:.2f}")
             time.sleep(sleep_time)
 
-def download_stuff(process_idx: int) -> Tuple[int, int]:
-    cache = DiskCache.create(
-        Path(CACHE_DIR.name),
+def download_with_many_threads(process_idx: int, cache_dir: Path, use_symlinks: bool) -> Tuple[int, int]:
+    cache = DiskCache(
+        cache_dir=cache_dir,
         fetcher=HttpxFetcher(),
-        use_symlinks=False,
-        # use_symlinks=process_idx % 2 == 0
+        use_symlinks=use_symlinks,
     )
     assert not isinstance(cache, Exception)
 
@@ -120,9 +118,20 @@ if __name__ == "__main__":
 
     server_proc = start_dummy_server()
     try:
-        pp = ProcessPoolExecutor(max_workers=10)
-        hits_and_misses: List[Tuple[int, int]] = list(pp.map(download_stuff, range(10)))
-        misses = sum(hnm[1] for hnm in hits_and_misses)
-        assert misses == PAYLOADS.__len__()
+        pp = ProcessPoolExecutor(max_workers=len(PAYLOADS))
+
+        for use_symlinks in (True, False):
+            cache_dir = tempfile.TemporaryDirectory(suffix="_cache")
+            hits_and_misses_futs: List[Future[Tuple[int, int]]] = [
+                pp.submit(
+                    download_with_many_threads,
+                    process_idx=process_idx,
+                    cache_dir=Path(cache_dir.name),
+                    use_symlinks=use_symlinks
+                )
+                for process_idx in range(10)
+            ]
+            misses = sum(f.result()[1] for f in hits_and_misses_futs)
+            assert misses == len(PAYLOADS)
     finally:
         server_proc.terminate()
