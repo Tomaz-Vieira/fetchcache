@@ -16,9 +16,11 @@ import logging
 
 import httpx
 
-from dlcache import Digest, DiskDownloadCache
+import dlcache
+from dlcache import DiskDownloadCache
+from dlcache.digest import ContentDigest
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 PAYLOADS = [secrets.token_bytes(4096 * 5) for _ in range(10)]
@@ -55,7 +57,7 @@ def download_stuff(process_idx: int) -> Tuple[int, int]:
         res = cache.download(f"http://localhost:{SERVER_PORT}/{idx}")
         assert not isinstance(res, Exception)
         (reader, digest) = res
-        assert sha256(reader.read()) == digest
+        assert ContentDigest(sha256(reader.read()).digest()) == digest
 
     tp = ThreadPoolExecutor(max_workers=10)
     rng = random.Random()
@@ -67,11 +69,11 @@ def download_stuff(process_idx: int) -> Tuple[int, int]:
     assert not isinstance(reader_digest, Exception)
     (reader, digest) = reader_digest
 
-    computed_digest = Digest(digest=sha256(reader.read()).hexdigest())
+    computed_digest = ContentDigest(digest=sha256(reader.read()).digest())
     assert digest == computed_digest
-    cached_reader = cache.get_cached(digest=digest)
+    cached_reader = cache.get(digest=digest)
     assert cached_reader is not None
-    assert Digest(digest=sha256(cached_reader.read()).hexdigest()) == computed_digest
+    assert ContentDigest(digest=sha256(cached_reader.read()).digest()) == computed_digest
 
     return (cache.hits(), cache.misses())
 
@@ -100,6 +102,8 @@ def start_dummy_server() -> multiprocessing.Process:
     return server_proc
 
 if __name__ == "__main__":
+    logging.basicConfig()
+    # logging.getLogger(dlcache.__name__).setLevel(logging.DEBUG)
     server_proc = start_dummy_server()
     try:
         pp = ProcessPoolExecutor(max_workers=10)
