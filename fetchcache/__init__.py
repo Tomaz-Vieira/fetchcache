@@ -21,7 +21,7 @@ class FetchInterrupted(DownloadCacheException):
         super().__init__(f"Downloading of {url} was interrupted")
 
 
-class CacheEntryPath:
+class _CacheEntryPath:
     """The file path used inside the cache directory
 
     The file name encodes both the sha of the URL as well as the sha of the contents
@@ -42,7 +42,7 @@ class CacheEntryPath:
         self.path: Final[Path] = cache_dir / f"{self.PREFIX}{self.url_digest}{self.INFIX}{content_digest}"
 
     @classmethod
-    def try_from_path(cls, path: Path) -> "Optional[CacheEntryPath]":
+    def try_from_path(cls, path: Path) -> "Optional[_CacheEntryPath]":
         name = path.name
         if not name.startswith(cls.PREFIX):
             return None
@@ -53,7 +53,7 @@ class CacheEntryPath:
         (url_hexdigest, contents_hexdigest) = urldigest_contentsdigest
         if len(url_hexdigest) != 64 or len(contents_hexdigest) != 64:
             return None
-        return CacheEntryPath(
+        return _CacheEntryPath(
             cache_dir=path.parent,
             url_digest=UrlDigest.parse(hexdigest=url_hexdigest),
             content_digest=ContentDigest.parse(hexdigest=contents_hexdigest),
@@ -62,7 +62,7 @@ class CacheEntryPath:
     def open(self) -> "Tuple[BinaryIO, ContentDigest]":
         return (open(self.path, "rb"), self.content_digest)
 
-class CacheEntrySymlinkBase:
+class _CacheEntrySymlinkBase:
     path: Final[Path]
     def __init__(self, path: Path) -> None:
         super().__init__()
@@ -71,13 +71,13 @@ class CacheEntrySymlinkBase:
     def exists(self) -> bool:
         return self.path.exists()
 
-    def link(self, *, src: CacheEntryPath):
+    def link(self, *, src: _CacheEntryPath):
         logger.info(f"Linking src {src.path} as {self.path}")
         os.symlink(src=src.path, dst=self.path)
 
-    def readlink(self) -> CacheEntryPath:
+    def readlink(self) -> _CacheEntryPath:
         raw_entry_path = self.path.readlink()
-        entry_path = CacheEntryPath.try_from_path(raw_entry_path)
+        entry_path = _CacheEntryPath.try_from_path(raw_entry_path)
         if entry_path is None:
             raise RuntimeError(f"Cache entry not found at {raw_entry_path}")
         return entry_path
@@ -88,11 +88,11 @@ class CacheEntrySymlinkBase:
         return self.readlink().open()
 
 
-class UrlHashSymlinkPath(CacheEntrySymlinkBase):
+class _UrlHashSymlinkPath(_CacheEntrySymlinkBase):
     def __init__(self, digest: UrlDigest, *, cache_dir: Path) -> None:
         super().__init__(cache_dir / f"url_{digest}")
 
-class ContentHashSymlinkPath(CacheEntrySymlinkBase):
+class _ContentHashSymlinkPath(_CacheEntrySymlinkBase):
     def __init__(self, digest: ContentDigest, *, cache_dir: Path) -> None:
         super().__init__(cache_dir / f"content_{digest}")
 
@@ -130,25 +130,25 @@ class DiskCache:
     def get_by_url(self, *, url: str) -> Optional[Tuple[BinaryIO, ContentDigest]]:
         url_digest = UrlDigest.from_url(url)
         if self.use_symlinks and os.name == "posix":
-            url_symlink = UrlHashSymlinkPath(url_digest, cache_dir=self.dir_path)
+            url_symlink = _UrlHashSymlinkPath(url_digest, cache_dir=self.dir_path)
             return url_symlink.try_open()
 
         for entry_path in self.dir_path.iterdir():
-            entry = CacheEntryPath.try_from_path(entry_path)
+            entry = _CacheEntryPath.try_from_path(entry_path)
             if entry and entry.url_digest == url_digest:
                 return entry.open()
         return None
 
     def get(self, *, digest: ContentDigest) -> Optional[BinaryIO]:
         if self.use_symlinks and os.name == "posix":
-            content_symlink = ContentHashSymlinkPath(digest, cache_dir=self.dir_path)
+            content_symlink = _ContentHashSymlinkPath(digest, cache_dir=self.dir_path)
             reader_digest = content_symlink.try_open()
             if reader_digest is None:
                 return None
             return reader_digest[0]
 
         for entry_path in self.dir_path.iterdir():
-            entry = CacheEntryPath.try_from_path(entry_path)
+            entry = _CacheEntryPath.try_from_path(entry_path)
             if entry and entry.content_digest == digest:
                 return open(entry_path, "rb")
         return None
@@ -156,7 +156,7 @@ class DiskCache:
     def try_fetch(self, url: str) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted": #FIXME: URL class?
         url_digest = UrlDigest.from_url(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
-        url_symlink_path = UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
+        url_symlink_path = _UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
 
         _ = self._ongoing_downloads_lock.acquire() # <<<<<<<<<
         dl_event = self._ongoing_downloads.get(url)
@@ -192,12 +192,12 @@ class DiskCache:
                 temp_file.close()
                 content_digest = ContentDigest(digest=contents_sha.digest())
 
-                cache_entry_path = CacheEntryPath(url_digest, content_digest, cache_dir=self.dir_path)
+                cache_entry_path = _CacheEntryPath(url_digest, content_digest, cache_dir=self.dir_path)
                 logger.debug(f"Moving temp file to {cache_entry_path.path}")
                 _ = shutil.move(src=temp_file.file.name, dst=cache_entry_path.path)
                 if self.use_symlinks and os.name == "posix":
                     url_symlink_path.link(src=cache_entry_path)
-                    contents_symlink_path = ContentHashSymlinkPath(cache_dir=self.dir_path, digest=content_digest)
+                    contents_symlink_path = _ContentHashSymlinkPath(cache_dir=self.dir_path, digest=content_digest)
                     contents_symlink_path.link(src=cache_entry_path)
             except Exception:
                 with self._ongoing_downloads_lock:
