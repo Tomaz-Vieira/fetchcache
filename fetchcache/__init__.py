@@ -178,7 +178,7 @@ class DiskCache:
         if dl_event: # some other thread is downloading it
             self._ongoing_downloads_lock.release() # >>>>>>>
             _ = dl_event.wait()
-            out = url_symlink_path.try_open()
+            out = self.get_by_url(url=url)
             if out is None:
                 return DownloadInterrupted(url=url)
             else:
@@ -191,7 +191,7 @@ class DiskCache:
         with interproc_lock:
             logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} gets the file lock for {interproc_lock.lock_file}")
             try:
-                out = url_symlink_path.try_open()
+                out = self.get_by_url(url=url)
                 if out is not None: # some other process already downloaded it
                     logger.debug(f"pid{os.getpid()}:{threading.get_ident()} uses CACHED file {interproc_lock.lock_file}")
                     self._hits += 1

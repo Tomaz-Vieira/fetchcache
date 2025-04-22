@@ -49,7 +49,12 @@ class HttpHandler(BaseHTTPRequestHandler):
             time.sleep(sleep_time)
 
 def download_stuff(process_idx: int) -> Tuple[int, int]:
-    cache = DiskCache.create(Path(CACHE_DIR.name), fetcher=HttpxFetcher())
+    cache = DiskCache.create(
+        Path(CACHE_DIR.name),
+        fetcher=HttpxFetcher(),
+        use_symlinks=False,
+        # use_symlinks=process_idx % 2 == 0
+    )
     assert not isinstance(cache, Exception)
 
     def dl_and_check(idx: int):
