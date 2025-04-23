@@ -1,5 +1,5 @@
 {
-  "include": ["dlcache/"],
+  "include": ["fetchcache/", "tests/"],
   "typeCheckingMode": "strict",
   "reportMissingSuperCall": "error",
   "reportUnnecessaryTypeIgnoreComment":"error",
