@@ -16,8 +16,8 @@ import logging
 
 import httpx
 
-from fetchcache import DiskCache, UrlDigest
-from fetchcache.digest import ContentDigest
+from sharedcache import DiskCache, UrlDigest
+from sharedcache.digest import ContentDigest
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ def url_hasher(url: str) -> UrlDigest:
 
 if __name__ == "__main__":
     logging.basicConfig()
-    # import fetchcache
+    # import sharedcache
     # logging.getLogger(fetchcace.__name__).setLevel(logging.DEBUG)
 
     server_proc = start_dummy_server()

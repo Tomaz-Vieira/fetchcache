@@ -1,4 +1,4 @@
-# Fetchcache
+# Sharedcache
 
 A thread-safe, process-safe cache for slow fetching operations, like web requests.
 

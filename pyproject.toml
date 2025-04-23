@@ -1,5 +1,5 @@
 [project]
-name = "fetchcache"
+name = "sharedcache"
 version = "0.1.0"
 description = "A cache for slow data fetching operations"
 readme = "README.md"
