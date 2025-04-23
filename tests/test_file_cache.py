@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
         for use_symlinks in (True, False):
             cache_dir = tempfile.TemporaryDirectory(suffix="_cache")
-            hits_and_misses_futs: List[Future[Tuple[int, int]]] = [
+            hits_and_misses_futs: "List[Future[Tuple[int, int]]]" = [
                 pp.submit(
                     download_with_many_threads,
                     process_idx=process_idx,

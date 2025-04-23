@@ -76,7 +76,7 @@ class _CacheEntrySymlinkBase:
         os.symlink(src=src.path, dst=self.path)
 
     def readlink(self) -> _CacheEntryPath:
-        raw_entry_path = self.path.readlink()
+        raw_entry_path = Path(os.readlink(self.path))
         entry_path = _CacheEntryPath.try_from_path(raw_entry_path)
         if entry_path is None:
             raise RuntimeError(f"Cache entry not found at {raw_entry_path}")
@@ -194,7 +194,7 @@ class DiskCache:
 
                 cache_entry_path = _CacheEntryPath(url_digest, content_digest, cache_dir=self.dir_path)
                 logger.debug(f"Moving temp file to {cache_entry_path.path}")
-                _ = shutil.move(src=temp_file.file.name, dst=cache_entry_path.path)
+                _ = shutil.move(src=temp_file.name, dst=cache_entry_path.path)
                 if self.use_symlinks and os.name == "posix":
                     url_symlink_path.link(src=cache_entry_path)
                     contents_symlink_path = _ContentHashSymlinkPath(cache_dir=self.dir_path, digest=content_digest)
