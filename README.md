@@ -5,7 +5,7 @@ A thread-safe, process-safe cache for slow fetching operations, like web request
 ## Usage
 
 ```python
-    from fetchcache import DiskCache, UrlDigest
+    from genericache import DiskCache, UrlDigest
     from pathlib import Path
     from typing import Iterable
     from hashlib import sha256
