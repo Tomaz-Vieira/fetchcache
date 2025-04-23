@@ -1,7 +1,7 @@
 [project]
-name = "sharedcache"
+name = "multicache"
 version = "0.0.1"
-description = "A cache for slow data fetching operations"
+description = "A thread-safe, process-safe cache for slow data fetching operations"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [

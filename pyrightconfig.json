@@ -1,5 +1,5 @@
 {
-  "include": ["sharedcache/", "tests/"],
+  "include": ["multicache/", "tests/"],
   "typeCheckingMode": "strict",
   "reportMissingSuperCall": "error",
   "reportUnnecessaryTypeIgnoreComment":"error",
