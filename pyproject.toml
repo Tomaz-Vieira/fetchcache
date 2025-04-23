@@ -1,5 +1,7 @@
 [project]
-name = "multicache"
+name = "genericache"
+authors = [{ name = "Tomaz Vieira", email = "tom.fogaca@gmail.com" }]
+license = "MIT"
 version = "0.0.1"
 description = "A thread-safe, process-safe cache for slow data fetching operations"
 readme = "README.md"
