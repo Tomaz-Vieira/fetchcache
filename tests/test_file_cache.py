@@ -79,11 +79,12 @@ def download_with_many_threads(process_idx: int, cache_dir: Path, use_symlinks: 
 
     return (cache.hits(), cache.misses())
 
+def do_start_server(*, server_port: int):
+    server_address = ('', server_port)
+    httpd = ThreadingHTTPServer(server_address, HttpHandler)
+    httpd.serve_forever()
+
 def start_dummy_server() -> multiprocessing.Process:
-    def do_start_server(*, server_port: int):
-        server_address = ('', server_port)
-        httpd = ThreadingHTTPServer(server_address, HttpHandler)
-        httpd.serve_forever()
 
     server_proc = multiprocessing.Process(
         target=do_start_server,
