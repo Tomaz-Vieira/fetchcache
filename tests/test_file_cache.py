@@ -16,7 +16,7 @@ import logging
 
 import httpx
 
-from fetchcache import DiskCache
+from fetchcache import DiskCache, UrlDigest
 from fetchcache.digest import ContentDigest
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ def download_with_many_threads(process_idx: int, cache_dir: Path, use_symlinks: 
     cache = DiskCache(
         cache_dir=cache_dir,
         fetcher=HttpxFetcher(),
+        url_hasher=url_hasher,
         use_symlinks=use_symlinks,
     )
     assert not isinstance(cache, Exception)
@@ -111,6 +112,9 @@ class HttpxFetcher:
 
     def __call__(self, url: str) -> Iterable[bytes]:
         return self._client.get(url).raise_for_status().iter_bytes(4096)
+
+def url_hasher(url: str) -> UrlDigest:
+    return UrlDigest.from_str(url)
 
 if __name__ == "__main__":
     logging.basicConfig()

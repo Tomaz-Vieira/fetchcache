@@ -12,6 +12,9 @@ class Digest:
         assert len(digest) == 32
         self.digest: Final[bytes] = digest
 
+    def __hash__(self) -> int:
+        return hash(self.digest)
+
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, self.__class__) and self.digest == value.digest
 
@@ -35,7 +38,7 @@ class ContentDigest(Digest):
 
 class UrlDigest(Digest):
     @classmethod
-    def from_url(cls, url: str) -> "UrlDigest":
+    def from_str(cls, url: str) -> "UrlDigest":
         return UrlDigest(digest=sha256(url.encode("utf8")).digest())
 
     @classmethod
