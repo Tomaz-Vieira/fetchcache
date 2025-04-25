@@ -1,0 +1,90 @@
+from concurrent.futures import ThreadPoolExecutor
+from hashlib import sha256
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler
+from typing import Final, Iterable, List, Type
+import random
+import time
+import logging
+from dataclasses import dataclass
+
+import httpx
+
+from genericache import Cache
+from genericache.digest import ContentDigest, UrlDigest
+
+logger = logging.getLogger(__name__)
+
+class HttpxFetcher:
+    def __init__(self) -> None:
+        super().__init__()
+        self._client: Final[httpx.Client] = httpx.Client()
+
+    def __call__(self, url: str) -> Iterable[bytes]:
+        return self._client.get(url).raise_for_status().iter_bytes(4096)
+
+def url_hasher(url: str) -> UrlDigest:
+    return UrlDigest.from_str(url)
+
+def make_http_handler_class(
+    payloads: List[bytes],
+    chunk_len: int,
+) -> Type[BaseHTTPRequestHandler]:
+    class HttpHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            payload_index = int(self.path.strip("/"))
+            payload = payloads[payload_index]
+
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-type", "application/octet-stream")
+            self.send_header("Content-Length", str(payload.__len__()))
+            self.end_headers()
+
+            data_len = len(payload)
+            for start in range(0, len(payload), chunk_len):
+                end = min(start + chunk_len, data_len)
+                sent_bytes = self.wfile.write(payload[start:end])
+                assert sent_bytes == end - start
+                sleep_time = random.random() * 0.5
+                logger.debug(f"Sent {start}:{end} of {self.path}. Will sleep for {sleep_time:.2f}")
+                time.sleep(sleep_time)
+
+
+    return HttpHandler
+
+@dataclass
+class HitsAndMisses:
+    hits: int
+    misses: int
+
+def download_with_many_threads(
+    process_idx: int,
+    server_port: int,
+    payloads: List[bytes],
+    cache: Cache[str],
+) -> HitsAndMisses:
+    assert not isinstance(cache, Exception)
+
+    def dl_and_check(idx: int):
+        res = cache.fetch(f"http://localhost:{server_port}/{idx}")
+        assert not isinstance(res, Exception)
+        (reader, digest) = res
+        assert ContentDigest(sha256(reader.read()).digest()) == digest
+
+    pool = ThreadPoolExecutor(max_workers=10)
+    rng = random.Random()
+    rng.seed(process_idx)
+    payload_indices = sorted(range(payloads.__len__()), key=lambda _: rng.random())
+    _ = list(pool.map(dl_and_check, payload_indices))
+
+    reader_digest = cache.fetch(f"http://localhost:{server_port}/0")
+    assert not isinstance(reader_digest, Exception)
+    (reader, digest) = reader_digest
+
+    computed_digest = ContentDigest(digest=sha256(reader.read()).digest())
+    assert digest == computed_digest
+    cached_reader = cache.get(digest=digest)
+    assert cached_reader is not None
+    assert ContentDigest(digest=sha256(cached_reader.read()).digest()) == computed_digest
+
+    return HitsAndMisses(hits=cache.hits(), misses=cache.misses())

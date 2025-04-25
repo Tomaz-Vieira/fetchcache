@@ -2,12 +2,12 @@ from hashlib import sha256
 from threading import Lock
 import threading
 from concurrent.futures import Future
-from typing import BinaryIO, Callable, Dict, Generic, Iterable, Optional, Tuple, TypeVar
+from typing import BinaryIO, Callable, Dict, Iterable, Optional, Tuple, TypeVar
 from typing_extensions import Final
 from io import BytesIO
 import logging
 
-from genericache import FetchInterrupted
+from genericache import Cache, FetchInterrupted
 from genericache.digest import ContentDigest, UrlDigest
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class _CacheEntry:
     def open(self) -> Tuple[BinaryIO, ContentDigest]:
         return (BytesIO(self.contents), self.digest)
 
-class MemoryCache(Generic[U]):
+class MemoryCache(Cache[U]):
     fetcher: Final[Callable[[U], Iterable[bytes]]]
     url_hasher: Final[Callable[[U], UrlDigest]]
         
