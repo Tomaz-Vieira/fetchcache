@@ -1,8 +1,7 @@
 from hashlib import sha256
 from threading import Lock
 from concurrent.futures import Future
-from typing import BinaryIO, Callable, Dict, Iterable, Optional, Tuple, TypeVar
-from typing_extensions import Final
+from typing import BinaryIO, Callable, Dict, Iterable, Optional, Tuple, TypeVar, Final
 from io import BytesIO
 import logging
 

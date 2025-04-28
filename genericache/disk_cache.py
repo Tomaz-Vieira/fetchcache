@@ -96,8 +96,8 @@ class DiskCache(Cache[U]):
         self,
         *,
         cache_dir: Path,
-        fetcher: Callable[[U], Iterable[bytes]],
-        url_hasher: Callable[[U], UrlDigest],
+        fetcher: "Callable[[U], Iterable[bytes]]",
+        url_hasher: "Callable[[U], UrlDigest]",
         use_symlinks: bool = True,
     ):
         # FileLock is reentrant, so multiple threads would be able to acquire the lock without a threading Lock

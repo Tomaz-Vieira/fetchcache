@@ -24,7 +24,7 @@ if __name__ == "__main__":
         )
         pool = ThreadPoolExecutor(max_workers=payloads.__len__())
         num_dl_groups = 13
-        futs: List[Future[None]] = []
+        futs: "List[Future[None]]" = []
         for i in range(num_dl_groups):
             payload_indices = random_range(seed=i, len=payloads.__len__())
             futs += [
