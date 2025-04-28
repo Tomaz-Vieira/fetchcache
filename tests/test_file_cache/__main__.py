@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
+from hashlib import sha256
 from pathlib import Path
 import multiprocessing
+import random
 import time
 import tempfile
-from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 from typing_extensions import List
 import logging
@@ -12,8 +14,9 @@ import secrets
 
 import httpx
 
+from genericache.digest import ContentDigest
 from genericache.disk_cache import DiskCache
-from tests import HitsAndMisses, HttpxFetcher, download_with_many_threads, make_http_handler_class, url_hasher
+from tests import HitsAndMisses, HttpxFetcher, dl_and_check, make_http_handler_class, url_hasher
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,7 @@ def start_dummy_server(payloads: List[bytes], server_port: int) -> multiprocessi
         raise RuntimeError("Dummy server did not become ready")
     return server_proc
 
-def do_download(
+def process_target_do_downloads(
     process_idx: int,
     server_port: int,
     payloads: List[bytes],
@@ -60,20 +63,36 @@ def do_download(
         fetcher=HttpxFetcher(),
         url_hasher=url_hasher,
     )
-    return download_with_many_threads(
-        payloads=payloads,
-        cache=cache,
-        process_idx=process_idx,
-        server_port=server_port,
-    )
-    
+
+    pool = ThreadPoolExecutor(max_workers=10)
+    rng = random.Random()
+    rng.seed(process_idx)
+    payload_indices = sorted(range(payloads.__len__()), key=lambda _: rng.random())
+    futs = [
+        pool.submit(dl_and_check, server_port=server_port, cache=cache, idx=idx)
+        for idx in payload_indices
+    ]
+    _ = [f.result() for f in futs]
+
+    reader_digest = cache.fetch(f"http://localhost:{server_port}/0")
+    assert not isinstance(reader_digest, Exception)
+    (reader, digest) = reader_digest
+
+    computed_digest = ContentDigest(digest=sha256(reader.read()).digest())
+    assert digest == computed_digest
+    cached_reader = cache.get(digest=digest)
+    assert cached_reader is not None
+    assert ContentDigest(digest=sha256(cached_reader.read()).digest()) == computed_digest
+
+    return HitsAndMisses(hits=cache.hits(), misses=cache.misses())
+
 
 if __name__ == "__main__":
     logging.basicConfig()
     # import genericache
     # logging.getLogger(genericache.__name__).setLevel(logging.DEBUG)
 
-    server_port = 8123 # DIXME: allocate a free one
+    server_port = 8123 # FIXME: allocate a free one
     payloads = [secrets.token_bytes(4096 * 5) for _ in range(10)]
     server_proc = start_dummy_server(payloads, server_port=server_port)
     try:
@@ -84,7 +103,7 @@ if __name__ == "__main__":
             logger.debug(f"Cache dir: {cache_dir.name}")
             hits_and_misses_futs: "List[Future[HitsAndMisses]]" = [
                 pp.submit(
-                    do_download,
+                    process_target_do_downloads,
                     process_idx=process_idx,
                     payloads=payloads,
                     server_port=server_port,

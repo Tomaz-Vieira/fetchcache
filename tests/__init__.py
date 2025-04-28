@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
@@ -57,34 +56,10 @@ class HitsAndMisses:
     hits: int
     misses: int
 
-def download_with_many_threads(
-    process_idx: int,
-    server_port: int,
-    payloads: List[bytes],
-    cache: Cache[str],
-) -> HitsAndMisses:
-    assert not isinstance(cache, Exception)
+def dl_and_check(cache: Cache[str], server_port: int, idx: int):
+    res = cache.fetch(f"http://localhost:{server_port}/{idx}")
+    assert not isinstance(res, Exception)
+    (reader, digest) = res
+    assert ContentDigest(sha256(reader.read()).digest()) == digest
 
-    def dl_and_check(idx: int):
-        res = cache.fetch(f"http://localhost:{server_port}/{idx}")
-        assert not isinstance(res, Exception)
-        (reader, digest) = res
-        assert ContentDigest(sha256(reader.read()).digest()) == digest
 
-    pool = ThreadPoolExecutor(max_workers=10)
-    rng = random.Random()
-    rng.seed(process_idx)
-    payload_indices = sorted(range(payloads.__len__()), key=lambda _: rng.random())
-    _ = list(pool.map(dl_and_check, payload_indices))
-
-    reader_digest = cache.fetch(f"http://localhost:{server_port}/0")
-    assert not isinstance(reader_digest, Exception)
-    (reader, digest) = reader_digest
-
-    computed_digest = ContentDigest(digest=sha256(reader.read()).digest())
-    assert digest == computed_digest
-    cached_reader = cache.get(digest=digest)
-    assert cached_reader is not None
-    assert ContentDigest(digest=sha256(cached_reader.read()).digest()) == computed_digest
-
-    return HitsAndMisses(hits=cache.hits(), misses=cache.misses())
