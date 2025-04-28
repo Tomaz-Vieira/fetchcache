@@ -3,7 +3,6 @@
 from hashlib import sha256
 from pathlib import Path
 import multiprocessing
-import random
 import time
 import tempfile
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
@@ -16,7 +15,7 @@ import httpx
 
 from genericache.digest import ContentDigest
 from genericache.disk_cache import DiskCache
-from tests import HitsAndMisses, HttpxFetcher, dl_and_check, make_http_handler_class, url_hasher
+from tests import HitsAndMisses, HttpxFetcher, dl_and_check, make_http_handler_class, random_range, url_hasher
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ def start_dummy_server(payloads: List[bytes], server_port: int) -> multiprocessi
         except Exception:
             logger.debug("Dummy server is not ready yet", )
             pass
-        time.sleep(0.1)
+        time.sleep(0.05)
     else:
         raise RuntimeError("Dummy server did not become ready")
     return server_proc
@@ -65,9 +64,7 @@ def process_target_do_downloads(
     )
 
     pool = ThreadPoolExecutor(max_workers=10)
-    rng = random.Random()
-    rng.seed(process_idx)
-    payload_indices = sorted(range(payloads.__len__()), key=lambda _: rng.random())
+    payload_indices = random_range(seed=process_idx, len=payloads.__len__())
     futs = [
         pool.submit(dl_and_check, server_port=server_port, cache=cache, idx=idx)
         for idx in payload_indices

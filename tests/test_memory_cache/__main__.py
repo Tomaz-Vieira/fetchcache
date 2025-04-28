@@ -1,15 +1,16 @@
 from concurrent.futures import Future, ThreadPoolExecutor
+import random
 import tempfile
-from typing_extensions import List
 from genericache.memory_cache import MemoryCache
 from tests import HitsAndMisses, HttpxFetcher, url_hasher
 import secrets
 import logging
 
-from tests.test_file_cache.__main__ import start_dummy_server
+from tests.test_file_cache.__main__ import random_range, start_dummy_server
 
-def download_everything(cache: MemoryCache):
-    payload_indices = sorted(range(payloads.__len__()), key=lambda _: rng.random())
+def download_everything(cache: MemoryCache[str]):
+    rng = random.Random()
+    # payload_indices = random_range(see
     futs = [
         pool.submit(dl_and_check, server_port=server_port, cache=cache, idx=idx)
         for idx in payload_indices

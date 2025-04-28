@@ -25,6 +25,11 @@ class HttpxFetcher:
 def url_hasher(url: str) -> UrlDigest:
     return UrlDigest.from_str(url)
 
+def random_range(*, seed: int, len: int) -> List[int]:
+    rng = random.Random()
+    rng.seed(seed)
+    return sorted(range(len), key=lambda _: rng.random())
+
 def make_http_handler_class(
     payloads: List[bytes],
     chunk_len: int,
