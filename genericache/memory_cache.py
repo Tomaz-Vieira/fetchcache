@@ -67,28 +67,26 @@ class MemoryCache(Cache[U]):
             return None
         return result.open()[0]
 
-    def try_fetch(self, url: U) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]": #FIXME: URL class?
+    def try_fetch(self, url: U) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
         url_digest = self.url_hasher(url)
 
         _ = self._downloads_lock.acquire() # <<<<<<<<<
-        logger.debug(f"tid{threading.get_ident()} gets the lock for {url}")
         dl_fut = self._downloads_by_url.get(url_digest)
         if dl_fut: # some other thread is downloading it
             self._downloads_lock.release() # >>>>>>>>>>
-            logger.debug(f"tid{threading.get_ident()} RELEASES the lock for {url}")
             result = dl_fut.result()
             if isinstance(result, Exception):
                 return result
+
             self._hits += 1
             return (BytesIO(result.contents), result.digest)
         else:
+            self._misses += 1
             dl_fut = self._downloads_by_url[url_digest] = Future()
             _ = dl_fut.set_running_or_notify_cancel() # we still hold the lock, so fut._condition is insta-acquired
             self._downloads_lock.release() # >>>>>>>>>
-            logger.debug(f"tid{threading.get_ident()} RELEASES the lock for {url}")
 
         try:
-            self._misses += 1
             contents = bytearray()
             contents_sha  = sha256()
             for chunk in self.fetcher(url):

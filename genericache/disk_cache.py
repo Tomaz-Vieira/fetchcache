@@ -119,9 +119,6 @@ class DiskCache(Cache[U]):
     def misses(self) -> int:
         return self._misses
 
-    def _contents_path(self, *, sha: str) -> Path: #FIXME: use HASH type?
-        return self.dir_path / sha
-
     def get_by_url(self, *, url: U) -> Optional[Tuple[BinaryIO, ContentDigest]]:
         url_digest = self.url_hasher(url)
         if self.use_symlinks and os.name == "posix":
@@ -148,7 +145,7 @@ class DiskCache(Cache[U]):
                 return open(entry_path, "rb")
         return None
 
-    def try_fetch(self, url: U) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]": #FIXME: URL class?
+    def try_fetch(self, url: U) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
         url_digest = self.url_hasher(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
         url_symlink_path = _UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
