@@ -1,6 +1,6 @@
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import List
-from genericache.memory_cache import MemoryCache
+from genericache import MemoryCache
 from tests import HttpxFetcher, hash_url
 import secrets
 import logging

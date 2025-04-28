@@ -29,3 +29,5 @@ class Cache(Protocol[U]):
                 return result
         raise RuntimeError("Number of retries exhausted")
 
+from .disk_cache import DiskCache #pyright: ignore[reportUnusedImport]
+from .memory_cache import MemoryCache #pyright: ignore[reportUnusedImport]

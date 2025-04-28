@@ -8,8 +8,7 @@ from typing_extensions import List
 import logging
 import secrets
 
-from genericache.digest import ContentDigest
-from genericache.disk_cache import DiskCache
+from genericache import ContentDigest, DiskCache
 from tests import HitsAndMisses, HttpxFetcher, dl_and_check, random_range, start_test_server, hash_url
 
 logger = logging.getLogger(__name__)
