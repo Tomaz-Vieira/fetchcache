@@ -68,19 +68,27 @@ def dl_and_check(cache: Cache[str], server_port: int, idx: int):
     (reader, digest) = res
     assert ContentDigest(sha256(reader.read()).digest()) == digest
 
-def _do_start_test_server(*, server_port: int, payloads: List[bytes]):
+def _do_start_test_server(
+    *,
+    http_handler_class: Type[BaseHTTPRequestHandler],
+    server_port: int,
+):
     server_address = ('', server_port)
-    http_handler_class = make_http_handler_class(
-        payloads,
-        chunk_len=4096,
-    )
     httpd = ThreadingHTTPServer(server_address, http_handler_class)
     httpd.serve_forever()
 
-def start_test_server(payloads: List[bytes], server_port: int) -> multiprocessing.Process:
+def start_test_server(
+    payloads: List[bytes],
+    server_port: int,
+    http_handler_class: "Type[BaseHTTPRequestHandler] | None" = None,
+) -> multiprocessing.Process:
+    http_handler_class = http_handler_class or make_http_handler_class(
+        payloads,
+        chunk_len=4096,
+    )
     server_proc = multiprocessing.Process(
         target=_do_start_test_server,
-        kwargs={"server_port": server_port, "payloads": payloads}
+        kwargs={"http_handler_class": http_handler_class, "server_port": server_port}
     )
     server_proc.start()
 
