@@ -1,16 +1,16 @@
 from concurrent.futures import Future, ThreadPoolExecutor
-import random
 import tempfile
+from typing import List
 from genericache.memory_cache import MemoryCache
-from tests import HitsAndMisses, HttpxFetcher, url_hasher
+from tests import HitsAndMisses, HttpxFetcher, hash_url
 import secrets
 import logging
 
-from tests.test_file_cache.__main__ import random_range, start_dummy_server
+from tests import random_range, start_test_server, dl_and_check
 
-def download_everything(cache: MemoryCache[str]):
-    rng = random.Random()
-    # payload_indices = random_range(see
+def download_everything(*, thread_idx: int, cache: MemoryCache[str], payloads: List[bytes]):
+    pool = ThreadPoolExecutor(max_workers=payloads.__len__())
+    payload_indices = random_range(seed=thread_idx, len=payloads.__len__())
     futs = [
         pool.submit(dl_and_check, server_port=server_port, cache=cache, idx=idx)
         for idx in payload_indices
@@ -24,11 +24,11 @@ if __name__ == "__main__":
 
     server_port = 8123 # FIXME: allocate a free one
     payloads = [secrets.token_bytes(4096 * 5) for _ in range(10)]
-    server_proc = start_dummy_server(payloads, server_port=server_port)
+    server_proc = start_test_server(payloads, server_port=server_port)
     try:
         cache = MemoryCache(
             fetcher=HttpxFetcher(),
-            url_hasher=url_hasher,
+            url_hasher=hash_url,
         )
         pp = ThreadPoolExecutor(max_workers=len(payloads))
 

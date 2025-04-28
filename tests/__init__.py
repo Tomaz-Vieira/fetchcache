@@ -1,6 +1,7 @@
 from hashlib import sha256
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import multiprocessing
 from typing import Final, Iterable, List, Type
 import random
 import time
@@ -22,7 +23,7 @@ class HttpxFetcher:
     def __call__(self, url: str) -> Iterable[bytes]:
         return self._client.get(url).raise_for_status().iter_bytes(4096)
 
-def url_hasher(url: str) -> UrlDigest:
+def hash_url(url: str) -> UrlDigest:
     return UrlDigest.from_str(url)
 
 def random_range(*, seed: int, len: int) -> List[int]:
@@ -67,4 +68,30 @@ def dl_and_check(cache: Cache[str], server_port: int, idx: int):
     (reader, digest) = res
     assert ContentDigest(sha256(reader.read()).digest()) == digest
 
+def _do_start_test_server(*, server_port: int, payloads: List[bytes]):
+    server_address = ('', server_port)
+    http_handler_class = make_http_handler_class(
+        payloads,
+        chunk_len=4096,
+    )
+    httpd = ThreadingHTTPServer(server_address, http_handler_class)
+    httpd.serve_forever()
 
+def start_test_server(payloads: List[bytes], server_port: int) -> multiprocessing.Process:
+    server_proc = multiprocessing.Process(
+        target=_do_start_test_server,
+        kwargs={"server_port": server_port, "payloads": payloads}
+    )
+    server_proc.start()
+
+    for _ in range(10):
+        try:
+            _ = httpx.head(f"http://localhost:{server_port}/0")
+            break
+        except Exception:
+            logger.debug("Dummy server is not ready yet", )
+            pass
+        time.sleep(0.05)
+    else:
+        raise RuntimeError("Dummy server did not become ready")
+    return server_proc

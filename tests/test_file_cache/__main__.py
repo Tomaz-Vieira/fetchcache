@@ -2,52 +2,19 @@
 
 from hashlib import sha256
 from pathlib import Path
-import multiprocessing
-import time
 import tempfile
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
-from http.server import ThreadingHTTPServer
 from typing_extensions import List
 import logging
 import secrets
 
-import httpx
-
 from genericache.digest import ContentDigest
 from genericache.disk_cache import DiskCache
-from tests import HitsAndMisses, HttpxFetcher, dl_and_check, make_http_handler_class, random_range, url_hasher
+from tests import HitsAndMisses, HttpxFetcher, dl_and_check, random_range, start_test_server, hash_url
 
 logger = logging.getLogger(__name__)
 
 
-def do_start_server(*, server_port: int, payloads: List[bytes]):
-    server_address = ('', server_port)
-    http_handler_class = make_http_handler_class(
-        payloads,
-        chunk_len=4096,
-    )
-    httpd = ThreadingHTTPServer(server_address, http_handler_class)
-    httpd.serve_forever()
-
-def start_dummy_server(payloads: List[bytes], server_port: int) -> multiprocessing.Process:
-
-    server_proc = multiprocessing.Process(
-        target=do_start_server,
-        kwargs={"server_port": server_port, "payloads": payloads}
-    )
-    server_proc.start()
-
-    for _ in range(10):
-        try:
-            _ = httpx.head(f"http://localhost:{server_port}/0")
-            break
-        except Exception:
-            logger.debug("Dummy server is not ready yet", )
-            pass
-        time.sleep(0.05)
-    else:
-        raise RuntimeError("Dummy server did not become ready")
-    return server_proc
 
 def process_target_do_downloads(
     process_idx: int,
@@ -60,7 +27,7 @@ def process_target_do_downloads(
         cache_dir=cache_dir,
         use_symlinks=use_symlinks,
         fetcher=HttpxFetcher(),
-        url_hasher=url_hasher,
+        url_hasher=hash_url,
     )
 
     pool = ThreadPoolExecutor(max_workers=10)
@@ -91,7 +58,7 @@ if __name__ == "__main__":
 
     server_port = 8123 # FIXME: allocate a free one
     payloads = [secrets.token_bytes(4096 * 5) for _ in range(10)]
-    server_proc = start_dummy_server(payloads, server_port=server_port)
+    server_proc = start_test_server(payloads, server_port=server_port)
     try:
         pp = ProcessPoolExecutor(max_workers=len(payloads))
 
