@@ -34,6 +34,6 @@ if __name__ == "__main__":
         a = [f.result() for f in futs]
         print(f"misses: {cache.misses()} hits: {cache.hits()}")
         assert cache.misses() == payloads.__len__()
-        assert cache.hits() == (num_dl_groups - 1) * payloads.__len__()
+        assert cache.hits() == num_dl_groups * payloads.__len__() - cache.misses()
     finally:
         server_proc.terminate()
