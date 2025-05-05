@@ -27,6 +27,7 @@ class NoopCache(Cache[U]):
         return None
 
     def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
+        self._misses += 1
         chunks = fetcher(url)
         contents = bytearray()
         contents_sha = sha256()
