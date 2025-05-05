@@ -39,3 +39,19 @@ A thread-safe, process-safe cache for slow fetching operations, like web request
     assert cache.hits() == 1
     assert cache.misses() == 1
 ```
+
+## Testing
+
+Run the modules inside `tests/`, e.g.:
+
+`uv run --python 3.11 python -m tests.test_disk_cache`
+
+You can run them all with something like
+
+```bash
+    find tests/ -name "__main__.py" | \
+    tr '/' '.' | sed 's@\.__main__.py@@' | \
+    xargs -t -I test_mod_name \
+        uv run --python 3.12 python -m test_mod_name
+```
+
