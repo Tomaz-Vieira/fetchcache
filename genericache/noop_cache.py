@@ -1,9 +1,9 @@
 from hashlib import sha256
-from typing import BinaryIO, Callable, Iterable, Optional, Tuple, TypeVar
+from typing import Callable, Iterable, Optional, Tuple, TypeVar
 from io import BytesIO
 import logging
 
-from genericache import Cache, FetchInterrupted
+from genericache import BytesReader, Cache, FetchInterrupted
 from genericache.digest import ContentDigest
 
 logger = logging.getLogger(__name__)
@@ -20,13 +20,13 @@ class NoopCache(Cache[U]):
     def misses(self) -> int:
         return self._misses
 
-    def get_by_url(self, *, url: U) -> Optional[Tuple[BinaryIO, ContentDigest]]:
+    def get_by_url(self, *, url: U) -> Optional[Tuple[BytesReader, ContentDigest]]:
         return None
 
-    def get(self, *, digest: ContentDigest) -> Optional[BinaryIO]:
+    def get(self, *, digest: ContentDigest) -> Optional[BytesReader]:
         return None
 
-    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
+    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BytesReader, ContentDigest] | FetchInterrupted[U]":
         self._misses += 1
         chunks = fetcher(url)
         contents = bytearray()

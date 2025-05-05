@@ -7,7 +7,7 @@ import tempfile
 from typing import BinaryIO, Callable, Dict, Final, Optional, Tuple, TypeVar
 
 from filelock import FileLock
-from genericache import Cache, FetchInterrupted
+from genericache import BytesReader, Cache, FetchInterrupted
 from genericache.digest import ContentDigest, UrlDigest
 import logging
 import threading
@@ -117,7 +117,7 @@ class DiskCache(Cache[U]):
     def misses(self) -> int:
         return self._misses
 
-    def get_by_url(self, *, url: U) -> Optional[Tuple[BinaryIO, ContentDigest]]:
+    def get_by_url(self, *, url: U) -> Optional[Tuple[BytesReader, ContentDigest]]:
         url_digest = self.url_hasher(url)
         if self.use_symlinks and os.name == "posix":
             url_symlink = _UrlHashSymlinkPath(url_digest, cache_dir=self.dir_path)
@@ -143,7 +143,7 @@ class DiskCache(Cache[U]):
                 return open(entry_path, "rb")
         return None
 
-    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
+    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BytesReader, ContentDigest] | FetchInterrupted[U]":
         url_digest = self.url_hasher(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
         url_symlink_path = _UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
@@ -198,7 +198,7 @@ class DiskCache(Cache[U]):
                 logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
             return cache_entry_path.open()
 
-    def fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]], retries: int = 3) -> "Tuple[BinaryIO, ContentDigest]":
+    def fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]], retries: int = 3) -> "Tuple[BytesReader, ContentDigest]":
         for _ in range(retries):
             result = self.try_fetch(url, fetcher)
             if not isinstance(result, FetchInterrupted):

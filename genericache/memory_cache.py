@@ -1,11 +1,11 @@
 from hashlib import sha256
 from threading import Lock
 from concurrent.futures import Future
-from typing import BinaryIO, Callable, Dict, Iterable, Optional, Tuple, TypeVar, Final
+from typing import Callable, Dict, Iterable, Optional, Tuple, TypeVar, Final
 from io import BytesIO
 import logging
 
-from genericache import Cache, FetchInterrupted
+from genericache import BytesReader, Cache, FetchInterrupted
 from genericache.digest import ContentDigest, UrlDigest
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class _CacheEntry:
         self.contents: Final[bytearray] = contents
         self.digest: Final[ContentDigest] = digest
 
-    def open(self) -> Tuple[BinaryIO, ContentDigest]:
+    def open(self) -> Tuple[BytesReader, ContentDigest]:
         return (BytesIO(self.contents), self.digest)
 
 class MemoryCache(Cache[U]):
@@ -44,7 +44,7 @@ class MemoryCache(Cache[U]):
     def misses(self) -> int:
         return self._misses
 
-    def get_by_url(self, *, url: U) -> Optional[Tuple[BinaryIO, ContentDigest]]:
+    def get_by_url(self, *, url: U) -> Optional[Tuple[BytesReader, ContentDigest]]:
         url_digest = self.url_hasher(url)
         with self._downloads_lock:
             dl = self._downloads_by_url.get(url_digest)
@@ -55,14 +55,14 @@ class MemoryCache(Cache[U]):
             return None
         return result.open()
 
-    def get(self, *, digest: ContentDigest) -> Optional[BinaryIO]:
+    def get(self, *, digest: ContentDigest) -> Optional[BytesReader]:
         with self._downloads_lock:
             result = self._downloads_by_content.get(digest)
         if result is None:
             return None
         return result.open()[0]
 
-    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
+    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BytesReader, ContentDigest] | FetchInterrupted[U]":
         url_digest = self.url_hasher(url)
 
         _ = self._downloads_lock.acquire() # <<<<<<<<<
