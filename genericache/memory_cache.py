@@ -23,17 +23,14 @@ class _CacheEntry:
         return (BytesIO(self.contents), self.digest)
 
 class MemoryCache(Cache[U]):
-    fetcher: Final[Callable[[U], Iterable[bytes]]]
     url_hasher: Final[Callable[[U], UrlDigest]]
         
     def __init__(
         self,
         *,
-        fetcher: Callable[[U], Iterable[bytes]],
         url_hasher: Callable[[U], UrlDigest],
     ):
         super().__init__()
-        self.fetcher = fetcher
         self.url_hasher = url_hasher
         self._downloads_lock: Final[Lock] = Lock()
         self._downloads_by_url: Dict[UrlDigest, Future["_CacheEntry | FetchInterrupted[U]"]] = {}
@@ -65,7 +62,7 @@ class MemoryCache(Cache[U]):
             return None
         return result.open()[0]
 
-    def try_fetch(self, url: U) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
+    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
         url_digest = self.url_hasher(url)
 
         _ = self._downloads_lock.acquire() # <<<<<<<<<
@@ -87,7 +84,7 @@ class MemoryCache(Cache[U]):
         try:
             contents = bytearray()
             contents_sha  = sha256()
-            for chunk in self.fetcher(url):
+            for chunk in fetcher(url):
                 contents_sha.update(chunk)
                 contents.extend(chunk)
             content_digest = ContentDigest(digest=contents_sha.digest())

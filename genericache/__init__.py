@@ -1,4 +1,4 @@
-from typing import BinaryIO, Generic, Optional, Protocol, Tuple, TypeVar
+from typing import BinaryIO, Callable, Generic, Iterable, Optional, Protocol, Tuple, TypeVar
 import logging
 
 from .digest import ContentDigest
@@ -21,13 +21,14 @@ class Cache(Protocol[U]):
     def misses(self) -> int: ...
     def get_by_url(self, *, url: U) -> Optional[Tuple[BinaryIO, ContentDigest]]: ...
     def get(self, *, digest: ContentDigest) -> Optional[BinaryIO]: ...
-    def try_fetch(self, url: U) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]": ...
-    def fetch(self, url: U, retries: int = 3) -> "Tuple[BinaryIO, ContentDigest]":
+    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]": ...
+    def fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]], retries: int = 3) -> "Tuple[BinaryIO, ContentDigest]":
         for _ in range(retries):
-            result = self.try_fetch(url)
+            result = self.try_fetch(url, fetcher)
             if not isinstance(result, FetchInterrupted):
                 return result
         raise RuntimeError("Number of retries exhausted")
 
 from .disk_cache import DiskCache as DiskCache
 from .memory_cache import MemoryCache as MemoryCache
+from .noop_cache import NoopCache as NoopCache
