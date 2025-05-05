@@ -1,3 +1,4 @@
+from collections import UserString
 from collections.abc import Iterable
 from hashlib import sha256
 import os
@@ -103,7 +104,7 @@ class DiskCache(Cache[U]):
         *,
         cache_dir: Path,
         url_hasher: "Callable[[U], UrlDigest]",
-        use_symlinks: bool = True,
+        use_symlinks: bool,
         _private_marker: __PrivateMarker,
     ):
         # FileLock is reentrant, so multiple threads would be able to acquire the lock without a threading Lock
@@ -153,6 +154,22 @@ class DiskCache(Cache[U]):
                 found=use_symlinks,
             )
         return entry
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        url_type: Type[U],
+        cache_dir: Path,
+        url_hasher: "Callable[[U], UrlDigest]",
+        use_symlinks: bool = True,
+    ) -> "DiskCache[U]":
+        out = cls.try_create(
+            url_type=url_type, cache_dir=cache_dir, url_hasher=url_hasher, use_symlinks=use_symlinks
+        )
+        if isinstance(out, Exception):
+            raise out
+        return out
 
     def hits(self) -> int:
         return self._hits
