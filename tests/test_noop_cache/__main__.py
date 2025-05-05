@@ -31,7 +31,7 @@ if __name__ == "__main__":
                 for idx in payload_indices
             ]
         a = [f.result() for f in futs]
-        print(f"misses: {cache.misses()} hits: {cache.hits()}")
+        logger.debug(f"misses: {cache.misses()} hits: {cache.hits()}")
         assert cache.misses() == num_dl_groups * payloads.__len__()
     finally:
         server_proc.terminate()

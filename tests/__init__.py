@@ -2,7 +2,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import multiprocessing
-from typing import Callable, Final, Iterable, List, Type
+from typing import Any, Callable, Final, Iterable, List, Type
 import random
 import time
 import logging
@@ -36,6 +36,8 @@ def make_http_handler_class(
     chunk_len: int,
 ) -> Type[BaseHTTPRequestHandler]:
     class HttpHandler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
         def do_GET(self):
             payload_index = int(self.path.strip("/"))
             payload = payloads[payload_index]
