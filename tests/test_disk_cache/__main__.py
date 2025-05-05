@@ -14,6 +14,7 @@ from tests import HitsAndMisses, HttpxFetcher, dl_and_check, random_range, start
 logger = logging.getLogger(__name__)
 
 
+fetcher = HttpxFetcher()
 
 def process_target_do_downloads(
     process_idx: int,
@@ -25,19 +26,18 @@ def process_target_do_downloads(
     cache=DiskCache(
         cache_dir=cache_dir,
         use_symlinks=use_symlinks,
-        fetcher=HttpxFetcher(),
         url_hasher=hash_url,
     )
 
     pool = ThreadPoolExecutor(max_workers=10)
     payload_indices = random_range(seed=process_idx, len=payloads.__len__())
     futs = [
-        pool.submit(dl_and_check, server_port=server_port, cache=cache, idx=idx)
+        pool.submit(dl_and_check, server_port=server_port, cache=cache, fetcher=fetcher, idx=idx)
         for idx in payload_indices
     ]
     _ = [f.result() for f in futs]
 
-    reader_digest = cache.fetch(f"http://localhost:{server_port}/0")
+    reader_digest = cache.fetch(f"http://localhost:{server_port}/0", fetcher=fetcher)
     assert not isinstance(reader_digest, Exception)
     (reader, digest) = reader_digest
 

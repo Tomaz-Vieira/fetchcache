@@ -2,7 +2,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import multiprocessing
-from typing import Final, Iterable, List, Type
+from typing import Callable, Final, Iterable, List, Type
 import random
 import time
 import logging
@@ -62,8 +62,8 @@ class HitsAndMisses:
     hits: int
     misses: int
 
-def dl_and_check(cache: Cache[str], server_port: int, idx: int):
-    res = cache.fetch(f"http://localhost:{server_port}/{idx}")
+def dl_and_check(cache: Cache[str], fetcher: Callable[[str], Iterable[bytes]], server_port: int, idx: int):
+    res = cache.fetch(f"http://localhost:{server_port}/{idx}", fetcher=fetcher)
     assert not isinstance(res, Exception)
     (reader, digest) = res
     assert ContentDigest(sha256(reader.read()).digest()) == digest

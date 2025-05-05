@@ -1,7 +1,8 @@
+
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import List
-from genericache import MemoryCache
-from tests import HttpxFetcher, hash_url
+from genericache import NoopCache
+from tests import HttpxFetcher
 import secrets
 import logging
 
@@ -14,14 +15,12 @@ if __name__ == "__main__":
     import genericache.memory_cache as mc
     logging.getLogger(mc.__name__).setLevel(logging.DEBUG)
 
-    server_port = 8124 # FIXME: allocate a free one
+    server_port = 8125 # FIXME: allocate a free one
     payloads = [secrets.token_bytes(4096 * 5) for _ in range(10)]
     server_proc = start_test_server(payloads, server_port=server_port)
     fetcher = HttpxFetcher()
     try:
-        cache = MemoryCache(
-            url_hasher=hash_url,
-        )
+        cache: NoopCache[str] = NoopCache()
         pool = ThreadPoolExecutor(max_workers=payloads.__len__())
         num_dl_groups = 13
         futs: "List[Future[None]]" = []
@@ -33,7 +32,6 @@ if __name__ == "__main__":
             ]
         a = [f.result() for f in futs]
         print(f"misses: {cache.misses()} hits: {cache.hits()}")
-        assert cache.misses() == payloads.__len__()
-        assert cache.hits() == num_dl_groups * payloads.__len__() - cache.misses()
+        assert cache.misses() == num_dl_groups * payloads.__len__()
     finally:
         server_proc.terminate()

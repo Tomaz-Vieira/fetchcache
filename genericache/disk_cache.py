@@ -96,7 +96,6 @@ class DiskCache(Cache[U]):
         self,
         *,
         cache_dir: Path,
-        fetcher: "Callable[[U], Iterable[bytes]]",
         url_hasher: "Callable[[U], UrlDigest]",
         use_symlinks: bool = True,
     ):
@@ -108,7 +107,6 @@ class DiskCache(Cache[U]):
         self._misses = 0
 
         self.dir_path: Final[Path] = cache_dir
-        self.fetcher: Final[ Callable[[U], Iterable[bytes]] ] = fetcher
         self.url_hasher: Final[ Callable[[U], UrlDigest] ] = url_hasher
         self.use_symlinks: Final[bool] = use_symlinks
         super().__init__()
@@ -145,7 +143,7 @@ class DiskCache(Cache[U]):
                 return open(entry_path, "rb")
         return None
 
-    def try_fetch(self, url: U) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
+    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BinaryIO, ContentDigest] | FetchInterrupted[U]":
         url_digest = self.url_hasher(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
         url_symlink_path = _UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
@@ -175,7 +173,7 @@ class DiskCache(Cache[U]):
                     return out
 
                 self._misses += 1
-                chunks = self.fetcher(url)
+                chunks = fetcher(url)
                 temp_file = tempfile.NamedTemporaryFile(delete=False)
                 contents_sha  = sha256()
                 for chunk in chunks:
@@ -200,9 +198,9 @@ class DiskCache(Cache[U]):
                 logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
             return cache_entry_path.open()
 
-    def fetch(self, url: U, retries: int = 3) -> "Tuple[BinaryIO, ContentDigest]":
+    def fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]], retries: int = 3) -> "Tuple[BinaryIO, ContentDigest]":
         for _ in range(retries):
-            result = self.try_fetch(url)
+            result = self.try_fetch(url, fetcher)
             if not isinstance(result, FetchInterrupted):
                 return result
         raise RuntimeError("Number of retries exhausted")
