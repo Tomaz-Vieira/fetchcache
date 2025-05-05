@@ -186,7 +186,7 @@ class DiskCache(Cache[U]):
                 return open(entry_path, "rb")
         return None
 
-    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "Tuple[BytesReader, ContentDigest] | FetchInterrupted[U]":
+    def try_fetch(self, url: U, fetcher: "Callable[[U], Iterable[bytes]]") -> "Tuple[BytesReader, ContentDigest] | FetchInterrupted[U]":
         url_digest = self.url_hasher(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
         url_symlink_path = _UrlHashSymlinkPath(cache_dir=self.dir_path, digest=url_digest)
@@ -241,7 +241,7 @@ class DiskCache(Cache[U]):
                 logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
             return cache_entry_path.open()
 
-    def fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]], retries: int = 3) -> "Tuple[BytesReader, ContentDigest]":
+    def fetch(self, url: U, fetcher: "Callable[[U], Iterable[bytes]]", retries: int = 3) -> "Tuple[BytesReader, ContentDigest]":
         for _ in range(retries):
             result = self.try_fetch(url, fetcher)
             if not isinstance(result, FetchInterrupted):

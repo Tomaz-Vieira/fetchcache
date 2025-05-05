@@ -44,7 +44,7 @@ if __name__ == "__main__":
     assert isinstance(failed_cache_creation2, CacheUrlTypeMismatch)
 
     tpe = ThreadPoolExecutor(max_workers=10)
-    futs: List[Future["DiskCache[str] | Exception"]] = []
+    futs: "List[Future[DiskCache[str] | Exception]]" = []
     for _ in range(10):
         futs.append(tpe.submit(
             DiskCache[str].try_create,
