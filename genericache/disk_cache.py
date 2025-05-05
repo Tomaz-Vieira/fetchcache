@@ -4,10 +4,10 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
-from typing import BinaryIO, Callable, Dict, Final, Optional, Tuple, TypeVar
+from typing import Any, BinaryIO, Callable, ClassVar, Dict, Final, Optional, Tuple, Type, TypeVar
 
 from filelock import FileLock
-from genericache import BytesReader, Cache, FetchInterrupted
+from genericache import BytesReader, Cache, CacheSymlinkUsageMismatch, FetchInterrupted, CacheUrlTypeMismatch
 from genericache.digest import ContentDigest, UrlDigest
 import logging
 import threading
@@ -92,12 +92,19 @@ class _ContentHashSymlinkPath(_CacheEntrySymlinkBase):
 
 U = TypeVar("U")
 class DiskCache(Cache[U]):
+    _caches: ClassVar[Dict[ Path, Tuple[Type[Any], "DiskCache[Any]"] ]] = {}
+    _caches_lock: ClassVar[threading.Lock] = threading.Lock()
+
+    class __PrivateMarker:
+        pass
+
     def __init__(
         self,
         *,
         cache_dir: Path,
         url_hasher: "Callable[[U], UrlDigest]",
         use_symlinks: bool = True,
+        _private_marker: __PrivateMarker,
     ):
         # FileLock is reentrant, so multiple threads would be able to acquire the lock without a threading Lock
         self._ongoing_downloads_lock: Final[threading.Lock] = threading.Lock()
@@ -110,6 +117,42 @@ class DiskCache(Cache[U]):
         self.url_hasher: Final[ Callable[[U], UrlDigest] ] = url_hasher
         self.use_symlinks: Final[bool] = use_symlinks
         super().__init__()
+
+    @classmethod
+    def try_create(
+        cls,
+        *,
+        url_type: Type[U],
+        cache_dir: Path,
+        url_hasher: "Callable[[U], UrlDigest]",
+        use_symlinks: bool = True,
+    ) -> "DiskCache[U] | CacheUrlTypeMismatch | CacheSymlinkUsageMismatch":
+        with cls._caches_lock:
+            url_type_and_entry = cls._caches.get(cache_dir)
+            if url_type_and_entry is None:
+                cache = DiskCache(
+                    cache_dir=cache_dir,
+                    url_hasher=url_hasher,
+                    use_symlinks=use_symlinks,
+                    _private_marker=cls.__PrivateMarker()
+                )
+                cls._caches[cache_dir] = (url_type, cache)
+                return cache
+
+        entry_url_type, entry = url_type_and_entry
+        if entry_url_type is not url_type:
+            return CacheUrlTypeMismatch(
+                cache_dir=cache_dir,
+                expected_url_type=entry_url_type,
+                found_url_type=url_type
+            )
+        if entry.use_symlinks != use_symlinks:
+            return CacheSymlinkUsageMismatch(
+                cache_dir=cache_dir,
+                expected=entry.use_symlinks,
+                found=use_symlinks,
+            )
+        return entry
 
     def hits(self) -> int:
         return self._hits

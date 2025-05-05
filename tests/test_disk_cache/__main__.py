@@ -23,11 +23,13 @@ def process_target_do_downloads(
     cache_dir: Path,
     use_symlinks: bool,
 ) -> HitsAndMisses:
-    cache=DiskCache(
+    cache = DiskCache[str].try_create(
+        url_type=str,
         cache_dir=cache_dir,
         use_symlinks=use_symlinks,
         url_hasher=hash_url,
     )
+    assert not isinstance(cache, Exception)
 
     pool = ThreadPoolExecutor(max_workers=10)
     payload_indices = random_range(seed=process_idx, len=payloads.__len__())
