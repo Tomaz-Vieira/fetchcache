@@ -52,9 +52,9 @@ def make_http_handler_class(
                 end = min(start + chunk_len, data_len)
                 sent_bytes = self.wfile.write(payload[start:end])
                 assert sent_bytes == end - start
-                sleep_time = random.random() * 0.5
-                logger.debug(f"Sent {start}:{end} of {self.path}. Will sleep for {sleep_time:.2f}")
-                time.sleep(sleep_time)
+                # sleep_time = random.random() * 0.5
+                # logger.debug(f"Sent {start}:{end} of {self.path}. Will sleep for {sleep_time:.2f}")
+                # time.sleep(sleep_time)
 
 
     return HttpHandler

@@ -32,7 +32,7 @@ class CacheUrlTypeMismatch(CacheException):
             f" but request was {self.found_url_type_name}"
         )
 
-class CacheSymlinkUsageMismatch(CacheException):
+class CacheFsLinkUsageMismatch(CacheException):
     def __init__(
         self,
         cache_dir: Path,

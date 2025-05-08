@@ -21,12 +21,10 @@ def process_target_do_downloads(
     server_port: int,
     payloads: List[bytes],
     cache_dir: Path,
-    use_symlinks: bool,
 ) -> HitsAndMisses:
     cache = DiskCache[str].try_create(
         url_type=str,
         cache_dir=cache_dir,
-        use_symlinks=use_symlinks,
         url_hasher=hash_url,
     )
     assert not isinstance(cache, Exception)
@@ -63,21 +61,19 @@ if __name__ == "__main__":
     try:
         pp = ProcessPoolExecutor(max_workers=len(payloads))
 
-        for use_symlinks in (True, False):
-            cache_dir = tempfile.TemporaryDirectory(suffix="_cache")
-            logger.debug(f"Cache dir: {cache_dir.name}")
-            hits_and_misses_futs: "List[Future[HitsAndMisses]]" = [
-                pp.submit(
-                    process_target_do_downloads,
-                    process_idx=process_idx,
-                    payloads=payloads,
-                    server_port=server_port,
-                    use_symlinks=use_symlinks,
-                    cache_dir=Path(cache_dir.name),
-                )
-                for process_idx in range(10)
-            ]
-            misses = sum(f.result().misses for f in hits_and_misses_futs)
-            assert misses == len(payloads)
+        cache_dir = tempfile.TemporaryDirectory(suffix="_cache")
+        logger.debug(f"Cache dir: {cache_dir.name}")
+        hits_and_misses_futs: "List[Future[HitsAndMisses]]" = [
+            pp.submit(
+                process_target_do_downloads,
+                process_idx=process_idx,
+                payloads=payloads,
+                server_port=server_port,
+                cache_dir=Path(cache_dir.name),
+            )
+            for process_idx in range(10)
+        ]
+        misses = sum(f.result().misses for f in hits_and_misses_futs)
+        assert misses == len(payloads)
     finally:
         server_proc.terminate()

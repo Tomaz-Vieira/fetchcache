@@ -1,7 +1,7 @@
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 import tempfile
-from genericache import CacheSymlinkUsageMismatch, CacheUrlTypeMismatch
+from genericache import CacheUrlTypeMismatch
 from genericache.digest import UrlDigest
 from genericache.disk_cache import DiskCache
 from tests import hash_url
@@ -27,21 +27,13 @@ if __name__ == "__main__":
     assert not isinstance(cache2, Exception)
     assert cache1 is cache2
 
-    failed_cache_creation1 = DiskCache[str].try_create(
-        cache_dir=Path(cache_dir.name),
-        url_hasher=hash_url,
-        url_type=str,
-        use_symlinks=False,
-    )
-    assert isinstance(failed_cache_creation1, CacheSymlinkUsageMismatch)
-
-    failed_cache_creation2 = DiskCache[bytes].try_create(
+    failed_cache_creation1 = DiskCache[bytes].try_create(
         cache_dir=Path(cache_dir.name),
         url_hasher=lambda url: UrlDigest(digest=url),
         url_type=bytes,
         use_symlinks=True,
     )
-    assert isinstance(failed_cache_creation2, CacheUrlTypeMismatch)
+    assert isinstance(failed_cache_creation1, CacheUrlTypeMismatch)
 
     tpe = ThreadPoolExecutor(max_workers=10)
     futs: "List[Future[DiskCache[str] | Exception]]" = []
