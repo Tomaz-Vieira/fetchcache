@@ -1,3 +1,5 @@
+from concurrent.futures import Future
+from datetime import datetime
 from collections.abc import Iterable
 from hashlib import sha256
 import os
@@ -7,7 +9,7 @@ import tempfile
 from typing import Any, Callable, ClassVar, Dict, Final, Optional, Tuple, Type, TypeVar
 
 from filelock import FileLock
-from genericache import BytesReader, Cache, CacheFsLinkUsageMismatch, FetchInterrupted, CacheUrlTypeMismatch
+from genericache import Cache, CacheEntry, CacheException, CacheFsLinkUsageMismatch, DigestUnavailable, FetchInterrupted, CacheUrlTypeMismatch
 from genericache.digest import ContentDigest, UrlDigest
 import logging
 import threading
@@ -15,7 +17,7 @@ import threading
 logger = logging.getLogger(__name__)
 
 
-class _CacheEntryPath:
+class _EntryPath:
     """The file path used inside the cache directory
 
     The file name encodes both the sha of the URL as well as the sha of the contents
@@ -29,14 +31,22 @@ class _CacheEntryPath:
     PREFIX = "entry__url_"
     INFIX = "_contents_"
 
-    def __init__(self, url_digest: UrlDigest, content_digest: ContentDigest, *, cache_dir: Path) -> None:
+    def __init__(
+        self,
+        url_digest: UrlDigest,
+        content_digest: ContentDigest,
+        *,
+        cache_dir: Path,
+        timestamp: datetime,
+    ) -> None:
         super().__init__()
         self.url_digest: Final[UrlDigest] = url_digest
         self.content_digest: Final[ContentDigest] = content_digest
+        self.timestamp: Final[datetime] = timestamp
         self.path: Final[Path] = cache_dir / f"{self.PREFIX}{self.url_digest}{self.INFIX}{content_digest}"
 
     @classmethod
-    def try_from_path(cls, path: Path) -> "Optional[_CacheEntryPath]":
+    def try_from_path(cls, path: Path) -> "Optional[_EntryPath]":
         name = path.name
         if not name.startswith(cls.PREFIX):
             return None
@@ -47,14 +57,21 @@ class _CacheEntryPath:
         (url_hexdigest, contents_hexdigest) = urldigest_contentsdigest
         if len(url_hexdigest) != 64 or len(contents_hexdigest) != 64:
             return None
-        return _CacheEntryPath(
+        mtime = os.path.getmtime(path)
+        return _EntryPath(
             cache_dir=path.parent,
             url_digest=UrlDigest.parse(hexdigest=url_hexdigest),
             content_digest=ContentDigest.parse(hexdigest=contents_hexdigest),
+            timestamp=datetime.fromtimestamp(mtime),
         )
 
-    def open(self) -> "Tuple[BytesReader, ContentDigest]":
-        return (open(self.path, "rb"), self.content_digest)
+    def open(self) -> CacheEntry:
+        return CacheEntry(
+            content_digest=self.content_digest,
+            reader=open(self.path, "rb"),
+            timestamp=self.timestamp,
+            url_digest=self.url_digest,
+        )
 
 
 U = TypeVar("U")
@@ -73,8 +90,8 @@ class DiskCache(Cache[U]):
         _private_marker: __PrivateMarker,
     ):
         # FileLock is reentrant, so multiple threads would be able to acquire the lock without a threading Lock
-        self._ongoing_downloads_lock: Final[threading.Lock] = threading.Lock()
-        self._ongoing_downloads: Dict[UrlDigest, threading.Event] = {}
+        self._instance_lock: Final[threading.Lock] = threading.Lock()
+        self._ongoing_downloads: Dict[UrlDigest, Future["_EntryPath | FetchInterrupted[U]"]] = {}
 
         self._hits = 0
         self._misses = 0
@@ -90,7 +107,6 @@ class DiskCache(Cache[U]):
         url_type: Type[U],
         cache_dir: Path,
         url_hasher: "Callable[[U], UrlDigest]",
-        use_symlinks: bool = True,
     ) -> "DiskCache[U] | CacheUrlTypeMismatch | CacheFsLinkUsageMismatch":
         with cls._caches_lock:
             url_type_and_entry = cls._caches.get(cache_dir)
@@ -119,10 +135,9 @@ class DiskCache(Cache[U]):
         url_type: Type[U],
         cache_dir: Path,
         url_hasher: "Callable[[U], UrlDigest]",
-        use_symlinks: bool = True,
     ) -> "DiskCache[U]":
         out = cls.try_create(
-            url_type=url_type, cache_dir=cache_dir, url_hasher=url_hasher, use_symlinks=use_symlinks
+            url_type=url_type, cache_dir=cache_dir, url_hasher=url_hasher
         )
         if isinstance(out, Exception):
             raise out
@@ -134,48 +149,61 @@ class DiskCache(Cache[U]):
     def misses(self) -> int:
         return self._misses
 
-    def get_by_url(self, *, url: U) -> Optional[Tuple[BytesReader, ContentDigest]]:
+    def get_by_url(self, *, url: U) -> Optional[CacheEntry]:
         url_digest = self.url_hasher(url)
+        out: "None | _EntryPath" = None
         for entry_path in self.dir_path.iterdir():
-            entry = _CacheEntryPath.try_from_path(entry_path)
-            if entry and entry.url_digest == url_digest:
+            entry = _EntryPath.try_from_path(entry_path)
+            if not entry:
+                continue
+            if entry.url_digest != url_digest:
+                continue
+            if not out:
+                out = entry
+            elif entry.timestamp > out.timestamp:
+                out = entry
+        if not out:
+            return None
+        return out.open()
+
+    def get(self, *, digest: ContentDigest) -> Optional[CacheEntry]:
+        for entry_path in self.dir_path.iterdir():
+            entry = _EntryPath.try_from_path(entry_path)
+            if entry and entry.content_digest == digest:
                 return entry.open()
         return None
 
-    def get(self, *, digest: ContentDigest) -> Optional[BytesReader]:
-        for entry_path in self.dir_path.iterdir():
-            entry = _CacheEntryPath.try_from_path(entry_path)
-            if entry and entry.content_digest == digest:
-                return open(entry_path, "rb")
-        return None
-
-    def try_fetch(self, url: U, fetcher: "Callable[[U], Iterable[bytes]]") -> "Tuple[BytesReader, ContentDigest] | FetchInterrupted[U]":
+    def try_fetch(
+        self,
+        url: U,
+        fetcher: "Callable[[U], Iterable[bytes]]",
+        force_refetch: "bool | ContentDigest",
+    ) -> "CacheEntry | FetchInterrupted[U] | DigestUnavailable":
         url_digest = self.url_hasher(url)
         interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
 
-        _ = self._ongoing_downloads_lock.acquire() # <<<<<<<<<
-        dl_event = self._ongoing_downloads.get(url_digest)
-        if dl_event: # some other thread is downloading it
-            self._ongoing_downloads_lock.release() # >>>>>>>
-            _ = dl_event.wait()
-            out = self.get_by_url(url=url)
-            if out is None:
-                return FetchInterrupted(url=url)
-            else:
-                self._hits += 1
-                return out
+        _ = self._instance_lock.acquire() # <<<<<<<<<
+        dl_fut = self._ongoing_downloads.get(url_digest)
+        if dl_fut: # some other thread IN THIS PROCESS is downloading it
+            self._instance_lock.release() # >>>>>>>
+            result = dl_fut.result()
+            if isinstance(result, Exception):
+                return result
+            self._hits += 1
+            return result.open()
         else:
-            dl_event = self._ongoing_downloads[url_digest] = threading.Event() # this thread will download it
-            self._ongoing_downloads_lock.release() # >>>>>>
+            dl_fut = self._ongoing_downloads[url_digest] = Future() # this thread will download it
+            self._instance_lock.release() # >>>>>>
 
         with interproc_lock:
             logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} gets the file lock for {interproc_lock.lock_file}")
             try:
-                out = self.get_by_url(url=url)
-                if out is not None: # some other process already downloaded it
-                    logger.debug(f"pid{os.getpid()}:{threading.get_ident()} uses CACHED file {interproc_lock.lock_file}")
-                    self._hits += 1
-                    return out
+                if force_refetch != True:
+                    out = self.get_by_url(url=url)
+                    if out and (force_refetch is False or out.content_digest == force_refetch):
+                        logger.debug(f"pid{os.getpid()}:{threading.get_ident()} uses CACHED file {interproc_lock.lock_file}")
+                        self._hits += 1
+                        return out
 
                 self._misses += 1
                 chunks = fetcher(url)
@@ -187,21 +215,27 @@ class DiskCache(Cache[U]):
                 temp_file.close()
                 content_digest = ContentDigest(digest=contents_sha.digest())
 
-                cache_entry_path = _CacheEntryPath(url_digest, content_digest, cache_dir=self.dir_path)
+                cache_entry_path = _EntryPath(url_digest, content_digest, cache_dir=self.dir_path, timestamp=datetime.now())
                 logger.debug(f"Moving temp file to {cache_entry_path.path}")
                 _ = shutil.move(src=temp_file.name, dst=cache_entry_path.path)
             except Exception:
-                with self._ongoing_downloads_lock:
+                with self._instance_lock:
                     del self._ongoing_downloads[url_digest] # remove the Event so this download can be retried
                 raise
             finally:
-                dl_event.set() # notify threads that download is done. It'll have failed if file is not there
+                dl_fut.set() # notify threads that download is done. It'll have failed if file is not there
                 logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
             return cache_entry_path.open()
 
-    def fetch(self, url: U, fetcher: "Callable[[U], Iterable[bytes]]", retries: int = 3) -> "Tuple[BytesReader, ContentDigest]":
+    def fetch(
+        self,
+        url: U,
+        fetcher: "Callable[[U], Iterable[bytes]]",
+        force_refetch: "bool | ContentDigest" = False,
+        retries: int = 3
+    ) -> "CacheEntry":
         for _ in range(retries):
-            result = self.try_fetch(url, fetcher)
+            result = self.try_fetch(url, fetcher, force_refetch=force_refetch)
             if not isinstance(result, FetchInterrupted):
                 return result
         raise RuntimeError("Number of retries exhausted")

@@ -64,11 +64,14 @@ class HitsAndMisses:
     hits: int
     misses: int
 
-def dl_and_check(cache: Cache[str], fetcher: Callable[[str], Iterable[bytes]], server_port: int, idx: int):
-    res = cache.fetch(f"http://localhost:{server_port}/{idx}", fetcher=fetcher)
-    assert not isinstance(res, Exception)
-    (reader, digest) = res
-    assert ContentDigest(sha256(reader.read()).digest()) == digest
+def dl_and_check(
+    cache: Cache[str],
+    fetcher: Callable[[str], Iterable[bytes]],
+    server_port: int,
+    idx: int,
+):
+    res = cache.fetch(f"http://localhost:{server_port}/{idx}", fetcher=fetcher, force_refetch=False)
+    assert ContentDigest(sha256(res.read()).digest()) == res.content_digest
 
 def _do_start_test_server(
     *,
