@@ -9,7 +9,7 @@ import tempfile
 from typing import Any, Callable, ClassVar, Dict, Final, Optional, Tuple, Type, TypeVar
 
 from filelock import FileLock
-from genericache import Cache, CacheEntry, CacheException, CacheFsLinkUsageMismatch, DigestUnavailable, FetchInterrupted, CacheUrlTypeMismatch
+from genericache import Cache, CacheEntry, CacheFsLinkUsageMismatch, ContentUnavailable, FetchInterrupted, CacheUrlTypeMismatch
 from genericache.digest import ContentDigest, UrlDigest
 import logging
 import threading
@@ -149,7 +149,7 @@ class DiskCache(Cache[U]):
     def misses(self) -> int:
         return self._misses
 
-    def get_by_url(self, *, url: U) -> Optional[CacheEntry]:
+    def _get_entry_by_url(self, *, url: U) -> Optional[_EntryPath]:
         url_digest = self.url_hasher(url)
         out: "None | _EntryPath" = None
         for entry_path in self.dir_path.iterdir():
@@ -162,6 +162,10 @@ class DiskCache(Cache[U]):
                 out = entry
             elif entry.timestamp > out.timestamp:
                 out = entry
+        return out
+
+    def get_by_url(self, *, url: U) -> Optional[CacheEntry]:
+        out = self._get_entry_by_url(url=url)
         if not out:
             return None
         return out.open()
@@ -178,9 +182,8 @@ class DiskCache(Cache[U]):
         url: U,
         fetcher: "Callable[[U], Iterable[bytes]]",
         force_refetch: "bool | ContentDigest",
-    ) -> "CacheEntry | FetchInterrupted[U] | DigestUnavailable":
+    ) -> "CacheEntry | FetchInterrupted[U] | ContentUnavailable":
         url_digest = self.url_hasher(url)
-        interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
 
         _ = self._instance_lock.acquire() # <<<<<<<<<
         dl_fut = self._ongoing_downloads.get(url_digest)
@@ -191,19 +194,22 @@ class DiskCache(Cache[U]):
                 return result
             self._hits += 1
             return result.open()
-        else:
-            dl_fut = self._ongoing_downloads[url_digest] = Future() # this thread will download it
-            self._instance_lock.release() # >>>>>>
 
+        dl_fut = self._ongoing_downloads[url_digest] = Future() # this thread will download it
+        _ = dl_fut.set_running_or_notify_cancel()
+        self._instance_lock.release() # >>>>>>
+
+        interproc_lock = FileLock(self.dir_path / f"downloading_url_{url_digest}.lock")
         with interproc_lock:
             logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} gets the file lock for {interproc_lock.lock_file}")
             try:
                 if force_refetch != True:
-                    out = self.get_by_url(url=url)
+                    out = self._get_entry_by_url(url=url)
                     if out and (force_refetch is False or out.content_digest == force_refetch):
-                        logger.debug(f"pid{os.getpid()}:{threading.get_ident()} uses CACHED file {interproc_lock.lock_file}")
+                        logger.debug(f"pid{os.getpid()}:{threading.get_ident()} uses CACHED file {out.path}")
                         self._hits += 1
-                        return out
+                        dl_fut.set_result(out)
+                        return out.open()
 
                 self._misses += 1
                 chunks = fetcher(url)
@@ -218,24 +224,14 @@ class DiskCache(Cache[U]):
                 cache_entry_path = _EntryPath(url_digest, content_digest, cache_dir=self.dir_path, timestamp=datetime.now())
                 logger.debug(f"Moving temp file to {cache_entry_path.path}")
                 _ = shutil.move(src=temp_file.name, dst=cache_entry_path.path)
-            except Exception:
+                dl_fut.set_result(cache_entry_path)
+                logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
+            except Exception as e:
                 with self._instance_lock:
                     del self._ongoing_downloads[url_digest] # remove the Event so this download can be retried
+                dl_fut.set_result(FetchInterrupted(url=url).with_traceback(e.__traceback__))
                 raise
-            finally:
-                dl_fut.set() # notify threads that download is done. It'll have failed if file is not there
-                logger.debug(f"pid{os.getpid()}:tid{threading.get_ident()} RELEASES the file lock for {interproc_lock.lock_file}")
-            return cache_entry_path.open()
+        if isinstance(force_refetch, ContentDigest) and cache_entry_path.content_digest != force_refetch:
+            return ContentUnavailable(content_digest=force_refetch)
+        return cache_entry_path.open()
 
-    def fetch(
-        self,
-        url: U,
-        fetcher: "Callable[[U], Iterable[bytes]]",
-        force_refetch: "bool | ContentDigest" = False,
-        retries: int = 3
-    ) -> "CacheEntry":
-        for _ in range(retries):
-            result = self.try_fetch(url, fetcher, force_refetch=force_refetch)
-            if not isinstance(result, FetchInterrupted):
-                return result
-        raise RuntimeError("Number of retries exhausted")

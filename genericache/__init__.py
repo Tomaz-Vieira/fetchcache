@@ -14,7 +14,7 @@ U = TypeVar("U")
 class CacheException(Exception):
     pass
 
-class DigestUnavailable(CacheException):
+class ContentUnavailable(CacheException):
     def __init__(self, content_digest: ContentDigest) -> None:
         self.content_digest = content_digest
         super().__init__(f"Contents unavailable for digest {content_digest}")
@@ -109,19 +109,24 @@ class Cache(Protocol[U]):
         url: U,
         fetcher: "Callable[[U], Iterable[bytes]]",
         force_refetch: "bool | ContentDigest",
-    ) -> "CacheEntry | FetchInterrupted[U]":
+    ) -> "CacheEntry | FetchInterrupted[U] | ContentUnavailable":
         ...
+
     def fetch(
         self,
         url: U,
-        fetcher: Callable[[U], Iterable[bytes]],
+        fetcher: "Callable[[U], Iterable[bytes]]",
         force_refetch: "bool | ContentDigest" = False,
         retries: int = 3
     ) -> "CacheEntry":
         for _ in range(retries):
             result = self.try_fetch(url, fetcher, force_refetch=force_refetch)
-            if not isinstance(result, FetchInterrupted):
+            if isinstance(result, CacheEntry):
                 return result
+            if isinstance(result, FetchInterrupted):
+                continue
+            if isinstance(result, Exception): # pyright: ignore[reportUnnecessaryIsInstance]
+                raise result
         raise RuntimeError("Number of retries exhausted")
 
 from .disk_cache import DiskCache as DiskCache
