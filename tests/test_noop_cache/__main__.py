@@ -2,7 +2,7 @@
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import List
 from genericache import NoopCache
-from tests import HttpxFetcher
+from tests import HttpxFetcher, hash_url
 import secrets
 import logging
 
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     server_proc = start_test_server(payloads, server_port=server_port)
     fetcher = HttpxFetcher()
     try:
-        cache: NoopCache[str] = NoopCache()
+        cache: NoopCache[str] = NoopCache(url_hasher=hash_url)
         pool = ThreadPoolExecutor(max_workers=payloads.__len__())
         num_dl_groups = 13
         futs: "List[Future[None]]" = []

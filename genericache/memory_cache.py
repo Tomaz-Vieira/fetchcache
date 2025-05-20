@@ -1,12 +1,12 @@
 from hashlib import sha256
 from datetime import datetime
-from threading import Event, Lock
+from threading import Lock
 from concurrent.futures import Future
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, TypeVar, Final
+from typing import Callable, Dict, Iterable, Optional, TypeVar, Final
 from io import BytesIO
 import logging
 
-from genericache import Cache, FetchInterrupted, CacheEntry
+from genericache import Cache, CacheEntry, ContentUnavailable, FetchInterrupted
 from genericache.digest import ContentDigest, UrlDigest
 
 logger = logging.getLogger(__name__)
@@ -14,19 +14,19 @@ logger = logging.getLogger(__name__)
 
 U = TypeVar("U")
 
-class _EntryBytes:
+class _EntryData:
     def __init__(
         self,
-        contents: bytearray,
-        contents_digest: ContentDigest,
         url_digest: UrlDigest,
+        content_digest: ContentDigest,
+        contents: bytearray,
         timestamp: datetime,
     ) -> None:
         super().__init__()
         self.contents: Final[bytearray] = contents
-        self.content_digest: Final[ContentDigest] = contents_digest
+        self.content_digest: Final[ContentDigest] = content_digest
         self.url_digest: Final[UrlDigest] = url_digest
-        self.timestamp = timestamp
+        self.timestamp: Final[datetime] = timestamp
 
     def open(self) -> CacheEntry:
         return CacheEntry(
@@ -46,10 +46,9 @@ class MemoryCache(Cache[U]):
     ):
         super().__init__()
         self.url_hasher = url_hasher
-        self._cache_lock: Final[Lock] = Lock()
-        self._url_locks: Dict[UrlDigest, Event] = {}
-        self._downloads_by_url: Dict[UrlDigest, List[_EntryBytes]] = {}
-        self._downloads_by_content: Dict[ContentDigest, "_EntryBytes"] = {}
+        self._instance_lock: Final[Lock] = Lock()
+        self._downloads_by_url: Dict[UrlDigest, Future["_EntryData | FetchInterrupted[U]"]] = {}
+        self._downloads_by_content: Dict[ContentDigest, "_EntryData"] = {}
         self._hits: int = 0
         self._misses: int = 0
 
@@ -61,26 +60,7 @@ class MemoryCache(Cache[U]):
 
     def get_by_url(self, *, url: U) -> Optional[CacheEntry]:
         url_digest = self.url_hasher(url)
-        out: "None | _EntryBytes" = None
-
-        with self._cache_lock:
-            
-        
-        for entry_path in self.dir_path.iterdir():
-            entry = _EntryPath.try_from_path(entry_path)
-            if not entry:
-                continue
-            if entry.url_digest != url_digest:
-                continue
-            if not out:
-                out = entry
-            elif entry.timestamp > out.timestamp:
-                out = entry
-        if not out:
-            return None
-        return out.open()
-        url_digest = self.url_hasher(url)
-        with self._cache_lock:
+        with self._instance_lock:
             dl = self._downloads_by_url.get(url_digest)
         if not dl:
             return None
@@ -90,30 +70,36 @@ class MemoryCache(Cache[U]):
         return result.open()
 
     def get(self, *, digest: ContentDigest) -> Optional[CacheEntry]:
-        with self._cache_lock:
+        with self._instance_lock:
             result = self._downloads_by_content.get(digest)
         if result is None:
             return None
         return result.open()
 
-    def try_fetch(self, url: U, fetcher: Callable[[U], Iterable[bytes]]) -> "CacheEntry | FetchInterrupted[U]":
+    def try_fetch(
+        self,
+        url: U,
+        fetcher: Callable[[U], Iterable[bytes]],
+        force_refetch: "bool | ContentDigest",
+    ) -> "CacheEntry | FetchInterrupted[U] | ContentUnavailable":
         url_digest = self.url_hasher(url)
 
-        _ = self._cache_lock.acquire() # <<<<<<<<<
+        _ = self._instance_lock.acquire() # <<<<<<<<<
         dl_fut = self._downloads_by_url.get(url_digest)
-        if dl_fut: # some other thread is downloading it
-            self._cache_lock.release() # >>>>>>>>>>
+        if dl_fut: # some other thread IN THIS PROCESS is downloading it
+            self._instance_lock.release() # >>>>>>>
             result = dl_fut.result()
             if isinstance(result, Exception):
                 return result
-
             self._hits += 1
-            return (BytesIO(result.contents), result.content_digest)
-        else:
-            self._misses += 1
-            dl_fut = self._downloads_by_url[url_digest] = Future()
-            _ = dl_fut.set_running_or_notify_cancel() # we still hold the lock, so fut._condition is insta-acquired
-            self._cache_lock.release() # >>>>>>>>>
+            if isinstance(force_refetch, ContentDigest) and result.content_digest != force_refetch:
+                return ContentUnavailable(content_digest=force_refetch)
+            return result.open()
+
+        self._misses += 1
+        dl_fut = self._downloads_by_url[url_digest] = Future()
+        _ = dl_fut.set_running_or_notify_cancel() # we still hold the lock, so fut._condition is insta-acquired
+        self._instance_lock.release() # >>>>>>>>>
 
         try:
             contents = bytearray()
@@ -122,16 +108,18 @@ class MemoryCache(Cache[U]):
                 contents_sha.update(chunk)
                 contents.extend(chunk)
             content_digest = ContentDigest(digest=contents_sha.digest())
-            result = _EntryBytes(contents=contents, contents_digest=content_digest)
-            with self._cache_lock:
-                self._downloads_by_content[content_digest] = result
-            dl_fut.set_result(result)
-            return result.open()
+            entry_data = _EntryData(url_digest, content_digest, contents, datetime.now())
+            with self._instance_lock:
+                self._downloads_by_content[content_digest] = entry_data
+            dl_fut.set_result(entry_data)
         except Exception as e:
-            with self._cache_lock:
+            with self._instance_lock:
                 del self._downloads_by_url[url_digest] # remove Future before set_result so failures can be retried
             error = FetchInterrupted(url=url).with_traceback(e.__traceback__)
             dl_fut.set_result(error)
             return error
+        if isinstance(force_refetch, ContentDigest) and entry_data.content_digest != force_refetch:
+            return ContentUnavailable(content_digest=force_refetch)
+        return entry_data.open()
 
 
