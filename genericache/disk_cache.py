@@ -193,6 +193,8 @@ class DiskCache(Cache[U]):
             if isinstance(result, Exception):
                 return result
             self._hits += 1
+            if isinstance(force_refetch, ContentDigest) and result.content_digest != force_refetch:
+                return ContentUnavailable(content_digest=force_refetch)
             return result.open()
 
         dl_fut = self._ongoing_downloads[url_digest] = Future() # this thread will download it
