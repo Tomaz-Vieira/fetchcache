@@ -14,7 +14,6 @@ if __name__ == "__main__":
         cache_dir=Path(cache_dir.name),
         url_hasher=hash_url,
         url_type=str,
-        use_symlinks=True,
     )
     assert not isinstance(cache1, Exception)
 
@@ -22,7 +21,6 @@ if __name__ == "__main__":
         cache_dir=Path(cache_dir.name),
         url_hasher=hash_url,
         url_type=str,
-        use_symlinks=True,
     )
     assert not isinstance(cache2, Exception)
     assert cache1 is cache2
@@ -31,7 +29,6 @@ if __name__ == "__main__":
         cache_dir=Path(cache_dir.name),
         url_hasher=lambda url: UrlDigest(digest=url),
         url_type=bytes,
-        use_symlinks=True,
     )
     assert isinstance(failed_cache_creation1, CacheUrlTypeMismatch)
 
@@ -43,7 +40,6 @@ if __name__ == "__main__":
             cache_dir=Path(cache_dir.name),
             url_hasher=hash_url,
             url_type=str,
-            use_symlinks=True,
         ))
     cache_instances = [f.result() for f in futs]
     for c in cache_instances:
