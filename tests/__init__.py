@@ -1,7 +1,9 @@
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import multiprocessing
+from pathlib import Path
 from typing import Any, Callable, Final, Iterable, List
 import random
 import time
@@ -12,6 +14,7 @@ import httpx
 
 from genericache import Cache
 from genericache.digest import ContentDigest, UrlDigest
+from genericache.disk_cache import DiskCache
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,38 @@ def dl_and_check(
 ):
     res = cache.fetch(f"http://localhost:{server_port}/{idx}", fetcher=fetcher, force_refetch=False)
     assert ContentDigest(sha256(res.read()).digest()) == res.content_digest
+
+def download_all_payloads_simultaneously_via_disk_cache(
+    process_idx: int,
+    server_port: int,
+    payloads: List[bytes],
+    cache_dir: Path,
+) -> HitsAndMisses:
+    cache = DiskCache[str].create(
+        url_type=str,
+        cache_dir=cache_dir,
+        url_hasher=hash_url,
+    )
+    fetcher = HttpxFetcher()
+    pool = ThreadPoolExecutor(max_workers=payloads.__len__())
+    payload_indices = random_range(seed=process_idx, len=payloads.__len__())
+    futs = [
+        pool.submit(cache.fetch, url=f"http://localhost:{server_port}/{idx}", fetcher=fetcher)
+        for idx in payload_indices
+    ]
+    _ = [f.result() for f in futs]
+
+    cache_entry = cache.fetch(f"http://localhost:{server_port}/{payload_indices[0]}", fetcher=fetcher, force_refetch=False)
+
+    computed_digest = ContentDigest(digest=sha256(cache_entry.read()).digest())
+    assert cache_entry.content_digest == computed_digest
+
+    cached_reader = cache.get(digest=cache_entry.content_digest)
+    assert cached_reader is not None
+    assert ContentDigest(digest=sha256(cached_reader.read()).digest()) == computed_digest
+
+    return HitsAndMisses(hits=cache.hits(), misses=cache.misses())
+
 
 def _do_start_test_server(
     *,
