@@ -2,7 +2,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import multiprocessing
-from typing import Any, Callable, Final, Iterable, List, Type
+from typing import Any, Callable, Final, Iterable, List
 import random
 import time
 import logging
@@ -31,10 +31,26 @@ def random_range(*, seed: int, len: int) -> List[int]:
     rng.seed(seed)
     return sorted(range(len), key=lambda _: rng.random())
 
-def make_http_handler_class(
+@dataclass
+class HitsAndMisses:
+    hits: int
+    misses: int
+
+def dl_and_check(
+    cache: Cache[str],
+    fetcher: Callable[[str], Iterable[bytes]],
+    server_port: int,
+    idx: int,
+):
+    res = cache.fetch(f"http://localhost:{server_port}/{idx}", fetcher=fetcher, force_refetch=False)
+    assert ContentDigest(sha256(res.read()).digest()) == res.content_digest
+
+def _do_start_test_server(
+    *,
     payloads: List[bytes],
     chunk_len: int,
-) -> Type[BaseHTTPRequestHandler]:
+    server_port: int,
+):
     class HttpHandler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:
             pass
@@ -56,44 +72,17 @@ def make_http_handler_class(
                 # logger.debug(f"Sent {start}:{end} of {self.path}. Will sleep for {sleep_time:.2f}")
                 # time.sleep(sleep_time)
 
-
-    return HttpHandler
-
-@dataclass
-class HitsAndMisses:
-    hits: int
-    misses: int
-
-def dl_and_check(
-    cache: Cache[str],
-    fetcher: Callable[[str], Iterable[bytes]],
-    server_port: int,
-    idx: int,
-):
-    res = cache.fetch(f"http://localhost:{server_port}/{idx}", fetcher=fetcher, force_refetch=False)
-    assert ContentDigest(sha256(res.read()).digest()) == res.content_digest
-
-def _do_start_test_server(
-    *,
-    http_handler_class: Type[BaseHTTPRequestHandler],
-    server_port: int,
-):
     server_address = ('', server_port)
-    httpd = ThreadingHTTPServer(server_address, http_handler_class)
+    httpd = ThreadingHTTPServer(server_address, HttpHandler)
     httpd.serve_forever()
 
 def start_test_server(
     payloads: List[bytes],
     server_port: int,
-    http_handler_class: "Type[BaseHTTPRequestHandler] | None" = None,
 ) -> multiprocessing.Process:
-    http_handler_class = http_handler_class or make_http_handler_class(
-        payloads,
-        chunk_len=4096,
-    )
     server_proc = multiprocessing.Process(
         target=_do_start_test_server,
-        kwargs={"http_handler_class": http_handler_class, "server_port": server_port}
+        kwargs={"server_port": server_port, "payloads": payloads, "chunk_len": 4096}
     )
     server_proc.start()
 
