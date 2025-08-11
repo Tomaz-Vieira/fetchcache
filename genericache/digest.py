@@ -25,7 +25,7 @@ class Digest:
     @classmethod
     def parse(cls, *, hexdigest: str) -> "Digest":
         if len(hexdigest) != 64:
-            raise ValueError(f"value should have 64 characters")
+            raise ValueError("value should have 64 characters")
         digest = bytearray(32)
         for hex_idx in range(0, 64, 2):
             digest[hex_idx // 2] = int(hexdigest[hex_idx : hex_idx + 2], 16)

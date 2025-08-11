@@ -31,3 +31,9 @@ preview = true
 
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.lint]
+ignore = [
+ # allow `x != True` because `not x` booleanizes everything
+ "E712",
+]

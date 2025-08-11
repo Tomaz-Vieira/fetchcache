@@ -155,6 +155,6 @@ class Cache(Protocol[U]):
         raise RuntimeError("Number of retries exhausted")
 
 
-from .disk_cache import DiskCache as DiskCache
-from .memory_cache import MemoryCache as MemoryCache
-from .noop_cache import NoopCache as NoopCache
+from .disk_cache import DiskCache as DiskCache # noqa: E402
+from .memory_cache import MemoryCache as MemoryCache # noqa: E402
+from .noop_cache import NoopCache as NoopCache # noqa: E402

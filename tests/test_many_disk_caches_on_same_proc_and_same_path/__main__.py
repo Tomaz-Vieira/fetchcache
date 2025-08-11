@@ -7,7 +7,6 @@ from genericache.disk_cache import DiskCache
 from tests import hash_url
 from typing import List
 
-
 if __name__ == "__main__":
     cache_dir = tempfile.TemporaryDirectory(suffix="_disk_cache")
     cache1 = DiskCache[str].try_create(
