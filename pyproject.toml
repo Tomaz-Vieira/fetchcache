@@ -8,14 +8,10 @@ version = "0.4.0"
 description = "A thread-safe, process-safe cache for slow data fetching operations"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [
-    "filelock>=3.16.1",
-]
+dependencies = ["filelock>=3.16.1"]
 
 [dependency-groups]
-dev = [
-    "httpx>=0.28.1",
-]
+dev = ["httpx>=0.28.1"]
 
 [project.urls]
 Repository = "https://github.com/Tomaz-Vieira/genericache"
@@ -24,3 +20,10 @@ Home-page = "https://github.com/Tomaz-Vieira/genericache"
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
+preview = true
+
+[tool.ruff]
+line-length = 88
