@@ -40,13 +40,21 @@ A thread-safe, process-safe cache for slow fetching operations, like web request
     assert cache.misses() == 1
 ```
 
+## Static type checking
+
+Run pyright over the entire project:
+
+```bash
+    python3 -m scripts.check
+```
+
 ## Testing
 
 Run the modules inside `tests/`, e.g.:
 
 `uv run --python 3.11 python -m tests.test_disk_cache`
 
-You can also run all tests via the `run_test` executable module:
+You can also run all tests via the `run_tests` executable module:
 
 ```bash
     python3 -m scripts.run_tests
