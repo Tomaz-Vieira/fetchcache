@@ -46,12 +46,9 @@ Run the modules inside `tests/`, e.g.:
 
 `uv run --python 3.11 python -m tests.test_disk_cache`
 
-You can run them all with something like
+You can also run all tests via the `run_test` executable module:
 
 ```bash
-    find tests/ -name "__main__.py" | \
-    tr '/' '.' | sed 's@\.__main__.py@@' | \
-    xargs -t -I test_mod_name \
-        uv run --python 3.12 python -m test_mod_name
+    python3 -m scripts.run_tests
 ```
 
