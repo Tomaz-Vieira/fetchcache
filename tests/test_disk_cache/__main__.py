@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-from pathlib import Path
-import tempfile
-from concurrent.futures import Future, ProcessPoolExecutor
-from typing_extensions import List
 import logging
 import secrets
+import tempfile
+from concurrent.futures import Future, ProcessPoolExecutor
+from pathlib import Path
+from typing import List
 
 from tests import (
     HitsAndMisses,
