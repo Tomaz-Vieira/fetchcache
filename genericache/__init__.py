@@ -25,10 +25,22 @@ U = TypeVar("U")
 class CacheException(Exception):
     pass
 
-class ContentUnavailable(CacheException):
-    def __init__(self, content_digest: ContentDigest) -> None:
-        self.content_digest = content_digest
-        super().__init__(f"Contents unavailable for digest {content_digest}")
+
+class DigestMismatch(CacheException, Generic[U]):
+    def __init__(
+        self,
+        *,
+        url: U,
+        expected_content_digest: ContentDigest,
+        actual_content_digest: ContentDigest,
+    ) -> None:
+        self.url = url
+        self.expected_content_digest = expected_content_digest
+        self.actual_content_digest = actual_content_digest
+        super().__init__(
+            f"Fetched content of {url} has unexpected digest {actual_content_digest} (Expected {expected_content_digest})."
+        )
+
 
 class FetchInterrupted(CacheException, Generic[U]):
     def __init__(self, *, url: U) -> None:
@@ -123,8 +135,7 @@ class Cache(Protocol[U]):
         url: U,
         fetcher: "Callable[[U], Iterable[bytes]]",
         force_refetch: "bool | ContentDigest",
-    ) -> "CacheEntry | FetchInterrupted[U] | ContentUnavailable":
-        ...
+    ) -> "CacheEntry | FetchInterrupted[U] | DigestMismatch[U]": ...
 
     def fetch(
         self,
@@ -140,6 +151,7 @@ class Cache(Protocol[U]):
             if isinstance(result, FetchInterrupted):
                 continue
             raise result
+
         raise RuntimeError("Number of retries exhausted")
 
 

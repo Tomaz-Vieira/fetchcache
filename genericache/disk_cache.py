@@ -196,7 +196,7 @@ class DiskCache(Cache[U]):
         url: U,
         fetcher: "Callable[[U], Iterable[bytes]]",
         force_refetch: "bool | ContentDigest",
-    ) -> "CacheEntry | FetchInterrupted[U] | ContentUnavailable":
+    ) -> "CacheEntry | FetchInterrupted[U] | DigestMismatch[U]":
         url_digest = self.url_hasher(url)
 
         _ = self._instance_lock.acquire()  # <<<<<<<<<
@@ -273,7 +273,13 @@ class DiskCache(Cache[U]):
                     FetchInterrupted(url=url).with_traceback(e.__traceback__)
                 )
                 raise
-        if isinstance(force_refetch, ContentDigest) and cache_entry_path.content_digest != force_refetch:
-            return ContentUnavailable(content_digest=force_refetch)
+        if (
+            isinstance(force_refetch, ContentDigest)
+            and cache_entry_path.content_digest != force_refetch
+        ):
+            return DigestMismatch(
+                url=url,
+                expected_content_digest=force_refetch,
+                actual_content_digest=cache_entry_path.content_digest,
+            )
         return cache_entry_path.open()
-

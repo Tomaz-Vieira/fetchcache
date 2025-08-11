@@ -6,7 +6,7 @@ from io import BytesIO
 from threading import Lock
 from typing import Callable, Dict, Final, Iterable, Optional, TypeVar
 
-from genericache import Cache, CacheEntry, ContentUnavailable, FetchInterrupted
+from genericache import Cache, CacheEntry, DigestMismatch, FetchInterrupted
 from genericache.digest import ContentDigest, UrlDigest
 
 logger = logging.getLogger(__name__)
@@ -37,9 +37,10 @@ class _EntryData:
             url_digest=self.url_digest,
         )
 
+
 class MemoryCache(Cache[U]):
     url_hasher: Final[Callable[[U], UrlDigest]]
-        
+
     def __init__(
         self,
         *,
@@ -84,7 +85,7 @@ class MemoryCache(Cache[U]):
         url: U,
         fetcher: Callable[[U], Iterable[bytes]],
         force_refetch: "bool | ContentDigest",
-    ) -> "CacheEntry | FetchInterrupted[U] | ContentUnavailable":
+    ) -> "CacheEntry | FetchInterrupted[U] | DigestMismatch[U]":
         url_digest = self.url_hasher(url)
 
         _ = self._instance_lock.acquire()  # <<<<<<<<<
@@ -95,8 +96,15 @@ class MemoryCache(Cache[U]):
             if isinstance(result, Exception):
                 return result
             self._hits += 1
-            if isinstance(force_refetch, ContentDigest) and result.content_digest != force_refetch:
-                return ContentUnavailable(content_digest=force_refetch)
+            if (
+                isinstance(force_refetch, ContentDigest)
+                and result.content_digest != force_refetch
+            ):
+                return DigestMismatch(
+                    url=url,
+                    expected_content_digest=force_refetch,
+                    actual_content_digest=result.content_digest,
+                )
             return result.open()
 
         self._misses += 1
@@ -127,8 +135,13 @@ class MemoryCache(Cache[U]):
             error = FetchInterrupted(url=url).with_traceback(e.__traceback__)
             dl_fut.set_result(error)
             return error
-        if isinstance(force_refetch, ContentDigest) and entry_data.content_digest != force_refetch:
-            return ContentUnavailable(content_digest=force_refetch)
+        if (
+            isinstance(force_refetch, ContentDigest)
+            and entry_data.content_digest != force_refetch
+        ):
+            return DigestMismatch(
+                url=url,
+                expected_content_digest=force_refetch,
+                actual_content_digest=entry_data.content_digest,
+            )
         return entry_data.open()
-
-
