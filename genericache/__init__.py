@@ -1,8 +1,18 @@
-from pathlib import Path
-from datetime import datetime
-from typing import Any, Callable, Final, Generic, Iterable, Optional, Protocol, Type, TypeVar
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
+from typing import (
+    Any,
+    Callable,
+    Final,
+    Generic,
+    Iterable,
+    Optional,
+    Protocol,
+    Type,
+    TypeVar,
+)
 
 from .digest import ContentDigest, UrlDigest
 
@@ -10,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 U = TypeVar("U")
+
 
 class CacheException(Exception):
     pass
@@ -23,6 +34,7 @@ class FetchInterrupted(CacheException, Generic[U]):
     def __init__(self, *, url: U) -> None:
         self.url = url
         super().__init__(f"Downloading of '{url}' was interrupted")
+
 
 class CacheUrlTypeMismatch(CacheException):
     def __init__(
@@ -38,6 +50,7 @@ class CacheUrlTypeMismatch(CacheException):
             f" but request was {self.found_url_type_name}"
         )
 
+
 class CacheFsLinkUsageMismatch(CacheException):
     def __init__(
         self,
@@ -51,6 +64,7 @@ class CacheFsLinkUsageMismatch(CacheException):
             f"Expected cache at {cache_dir} to have symlinking set to {expected}, requested {found}"
         )
 
+
 class BytesReaderP(Protocol):
     def read(self, size: int = -1, /) -> bytes: ...
     def readable(self) -> bool: ...
@@ -59,6 +73,7 @@ class BytesReaderP(Protocol):
     def tell(self) -> int: ...
     @property
     def closed(self) -> bool: ...
+
 
 class CacheEntry(BytesReaderP):
     url_digest: Final[UrlDigest]
@@ -98,7 +113,6 @@ class CacheEntry(BytesReaderP):
         return self._reader.closed
 
 
-
 class Cache(Protocol[U]):
     def hits(self) -> int: ...
     def misses(self) -> int: ...
@@ -117,7 +131,7 @@ class Cache(Protocol[U]):
         url: U,
         fetcher: "Callable[[U], Iterable[bytes]]",
         force_refetch: "bool | ContentDigest" = False,
-        retries: int = 3
+        retries: int = 3,
     ) -> "CacheEntry":
         for _ in range(retries):
             result = self.try_fetch(url, fetcher, force_refetch=force_refetch)
@@ -128,6 +142,7 @@ class Cache(Protocol[U]):
             if isinstance(result, Exception): # pyright: ignore[reportUnnecessaryIsInstance]
                 raise result
         raise RuntimeError("Number of retries exhausted")
+
 
 from .disk_cache import DiskCache as DiskCache
 from .memory_cache import MemoryCache as MemoryCache
