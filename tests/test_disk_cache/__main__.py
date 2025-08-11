@@ -3,7 +3,7 @@
 from pathlib import Path
 import tempfile
 from concurrent.futures import Future, ProcessPoolExecutor
-from typing_extensions import List
+from typing import List
 import logging
 import secrets
 
