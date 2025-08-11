@@ -7,7 +7,11 @@ from typing_extensions import List
 import logging
 import secrets
 
-from tests import HitsAndMisses, download_all_payloads_simultaneously_via_disk_cache, start_test_server
+from tests import (
+    HitsAndMisses,
+    download_all_payloads_simultaneously_via_disk_cache,
+    start_test_server,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +20,7 @@ if __name__ == "__main__":
     # import genericache
     # logging.getLogger(genericache.__name__).setLevel(logging.DEBUG)
 
-    server_port = 8123 # FIXME: allocate a free one
+    server_port = 8123  # FIXME: allocate a free one
     payloads = [secrets.token_bytes(4096 * 5) for _ in range(10)]
     server_proc = start_test_server(payloads, server_port=server_port)
     try:

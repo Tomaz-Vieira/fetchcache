@@ -7,7 +7,6 @@ from genericache.disk_cache import DiskCache
 from tests import hash_url
 from typing import List
 
-
 if __name__ == "__main__":
     cache_dir = tempfile.TemporaryDirectory(suffix="_disk_cache")
     cache1 = DiskCache[str].try_create(
@@ -35,12 +34,14 @@ if __name__ == "__main__":
     tpe = ThreadPoolExecutor(max_workers=10)
     futs: "List[Future[DiskCache[str] | Exception]]" = []
     for _ in range(10):
-        futs.append(tpe.submit(
-            DiskCache[str].try_create,
-            cache_dir=Path(cache_dir.name),
-            url_hasher=hash_url,
-            url_type=str,
-        ))
+        futs.append(
+            tpe.submit(
+                DiskCache[str].try_create,
+                cache_dir=Path(cache_dir.name),
+                url_hasher=hash_url,
+                url_type=str,
+            )
+        )
     cache_instances = [f.result() for f in futs]
     for c in cache_instances:
         assert isinstance(c, DiskCache)

@@ -12,9 +12,10 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     import genericache.memory_cache as mc
+
     logging.getLogger(mc.__name__).setLevel(logging.DEBUG)
 
-    server_port = 8124 # FIXME: allocate a free one
+    server_port = 8124  # FIXME: allocate a free one
     payloads = [secrets.token_bytes(4096 * 5) for _ in range(10)]
     server_proc = start_test_server(payloads, server_port=server_port)
     fetcher = HttpxFetcher()
@@ -28,7 +29,13 @@ if __name__ == "__main__":
         for i in range(num_dl_groups):
             payload_indices = random_range(seed=i, len=payloads.__len__())
             futs += [
-                pool.submit(dl_and_check, server_port=server_port, fetcher=fetcher, cache=cache, idx=idx)
+                pool.submit(
+                    dl_and_check,
+                    server_port=server_port,
+                    fetcher=fetcher,
+                    cache=cache,
+                    idx=idx,
+                )
                 for idx in payload_indices
             ]
         a = [f.result() for f in futs]
