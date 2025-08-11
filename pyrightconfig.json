@@ -1,5 +1,5 @@
 {
-  "include": ["genericache/", "tests/"],
+  "include": ["genericache/", "tests/", "scripts/"],
   "typeCheckingMode": "strict",
   "reportMissingSuperCall": "error",
   "reportUnnecessaryTypeIgnoreComment":"error",
