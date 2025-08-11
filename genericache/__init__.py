@@ -139,8 +139,7 @@ class Cache(Protocol[U]):
                 return result
             if isinstance(result, FetchInterrupted):
                 continue
-            if isinstance(result, Exception): # pyright: ignore[reportUnnecessaryIsInstance]
-                raise result
+            raise result
         raise RuntimeError("Number of retries exhausted")
 
 
