@@ -58,7 +58,7 @@ class CacheFsLinkUsageMismatch(CacheException):
         expected: bool,
         found: bool,
     ) -> None:
-        self.expected_symlink_usage = expected,
+        self.expected_symlink_usage = expected
         self.found_symlink_usage = found
         super().__init__(
             f"Expected cache at {cache_dir} to have symlinking set to {expected}, requested {found}"
