@@ -129,9 +129,9 @@ class MemoryCache(Cache[U]):
             dl_fut.set_result(entry_data)
         except Exception as e:
             with self._instance_lock:
-                del self._downloads_by_url[
-                    url_digest
-                ]  # remove Future before set_result so failures can be retried
+                # remove Future before set_result so failures can be retried
+                del self._downloads_by_url[url_digest]
+
             error = FetchInterrupted(url=url).with_traceback(e.__traceback__)
             dl_fut.set_result(error)
             return error
