@@ -10,6 +10,8 @@ from genericache.digest import ContentDigest, UrlDigest
 logger = logging.getLogger(__name__)
 
 U = TypeVar("U")
+
+
 class NoopCache(Cache[U]):
 
     def __init__(self, *, url_hasher: "Callable[[U], UrlDigest]"):
@@ -51,7 +53,3 @@ class NoopCache(Cache[U]):
             )
         except Exception as e:
             return FetchInterrupted(url=url).with_traceback(e.__traceback__)
-        
-
-
-
