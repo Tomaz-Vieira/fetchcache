@@ -13,7 +13,6 @@ U = TypeVar("U")
 
 
 class NoopCache(Cache[U]):
-
     def __init__(self, *, url_hasher: "Callable[[U], UrlDigest]"):
         super().__init__()
         self._misses: int = 0
