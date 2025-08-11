@@ -213,11 +213,12 @@ wheels = [
 
 [[package]]
 name = "genericache"
-version = "0.4.1"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "filelock", version = "3.16.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "filelock", version = "3.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+    { name = "typing-extensions" },
 ]
 
 [package.dev-dependencies]
@@ -229,7 +230,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "filelock", specifier = ">=3.16.1" }]
+requires-dist = [
+    { name = "filelock", specifier = ">=3.16.1" },
+    { name = "typing-extensions", specifier = ">=4.13.2" },
+]
 
 [package.metadata.requires-dev]
 dev = [

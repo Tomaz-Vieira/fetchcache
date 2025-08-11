@@ -4,11 +4,14 @@ authors = [{ name = "Tomaz Vieira", email = "tom.fogaca@gmail.com" }]
 maintainers = [{ name = "Tomaz Vieira", email = "tom.fogaca@gmail.com" }]
 license = "MIT"
 license-files = ["LICENSE"]
-version = "0.4.1"
+version = "0.5.0"
 description = "A thread-safe, process-safe cache for slow data fetching operations"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = ["filelock>=3.16.1"]
+dependencies = [
+    "filelock>=3.16.1",
+    "typing-extensions>=4.13.2",
+]
 
 [dependency-groups]
 dev = [
