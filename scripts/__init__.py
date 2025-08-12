@@ -18,6 +18,7 @@ class PyVersion:
 
 
 SUPPORTED_PYTHON_VERSIONS: Final[List[PyVersion]] = [
+    PyVersion(major=3, minor=8),
     PyVersion(major=3, minor=9),
     PyVersion(major=3, minor=10),
     PyVersion(major=3, minor=11),
