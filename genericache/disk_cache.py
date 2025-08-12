@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import inspect
 import tempfile
 import threading
 from collections.abc import Iterable
@@ -83,6 +84,19 @@ class _EntryPath:
             url_digest=self.url_digest,
         )
 
+def _are_same_class(class1: Type[Any], class2: Type[Any]) -> bool:
+    """Guess if two classes are the same.
+
+    If they have been imported via different paths, then `class1 is not class2`
+    This test is not bullet proof as each instantiation-via-import could produce
+    a different class object.
+    """
+    if class1 is class2:
+        return True
+    if class1.__qualname__ != class2.__qualname__:
+        return False
+    return inspect.getfile(class1) == inspect.getfile(class2)
+
 
 U = TypeVar("U")
 
@@ -134,7 +148,7 @@ class DiskCache(Cache[U]):
                 return cache
 
         entry_url_type, entry = url_type_and_entry
-        if entry_url_type is not url_type:
+        if not _are_same_class(entry_url_type, url_type):
             return CacheUrlTypeMismatch(
                 cache_dir=cache_dir,
                 expected_url_type=entry_url_type,
